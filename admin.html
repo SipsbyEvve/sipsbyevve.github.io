@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-03-1">
+<meta name="sbe-build" content="2026-11-09-1">
 <title>Sips by Evve — Sticker Admin</title>
 <style>
   :root{
@@ -398,6 +398,34 @@
   .o-no{ font-family:ui-monospace,Menlo,monospace; font-weight:900; background:#3a2e22; color:#fff; border-radius:8px; padding:3px 9px; letter-spacing:1px; font-size:0.85rem; }
   .o-no.dupe{ background:#b23b3b; }
   .o-top{ flex:1 1 100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .o-colour{ flex:0 1 150px; min-width:110px; }
+  .sp-btn{ display:flex; align-items:center; gap:8px; margin:0; padding:4px 8px; min-width:170px; max-width:260px; background:#fff !important; color:var(--ink) !important; border:1px solid var(--line) !important; border-radius:10px; font-weight:600; font-size:0.82rem; text-align:left; }
+  .sp-btn img, .sp-btn .sp-empty{ width:34px; height:34px; border-radius:6px; object-fit:cover; flex:none; background:var(--bg); }
+  .sp-btn small{ display:block; color:var(--muted); font-weight:400; font-size:0.7rem; }
+  .sp-btn:disabled{ opacity:0.85; cursor:default; }
+  .sp-pop{ position:absolute; z-index:60; width:min(560px, calc(100vw - 24px)); max-height:60vh; overflow:auto; background:#fffdf9; border:2px solid var(--brown); border-radius:14px; padding:10px; box-shadow:0 14px 34px rgba(0,0,0,0.2); }
+  .sp-pop input{ margin:0 0 6px; }
+  .sp-pop .sp-grp{ font-size:0.74rem; font-weight:800; color:var(--muted); margin:8px 0 4px; }
+  .sp-pop .sp-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(88px, 1fr)); gap:6px; }
+  .sp-pop .sp-item{ margin:0; padding:4px; background:#fff; color:var(--ink); border:2px solid var(--line); border-radius:8px; font-size:0.74rem; font-weight:800; text-align:center; }
+  .sp-pop .sp-item img{ width:100%; height:52px; object-fit:cover; border-radius:5px; display:block; margin-bottom:3px; background:var(--bg); }
+  .sp-pop .sp-item.on{ border-color:#1ea952; background:#e8f9ee; }
+  .sp-pop .sp-item.sold{ opacity:0.45; }
+  .o-paid-note{ font-size:0.75rem; color:#b0452f; font-weight:700; align-self:center; }
+  .colour-edit{ flex-basis:100%; display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:0.8rem; padding-top:4px; }
+  .colour-chip{ display:inline-flex; align-items:center; gap:5px; background:#fbf3e6; border:1px solid var(--line); border-radius:999px; padding:2px 4px 2px 6px; }
+  .colour-chip.sold{ opacity:0.55; }
+  .colour-chip i{ width:14px; height:14px; border-radius:50%; display:inline-block; border:1px solid rgba(0,0,0,0.2); }
+  .colour-chip button{ margin:0; padding:1px 6px; font-size:0.72rem; background:none !important; color:var(--brown-dark) !important; border:none !important; }
+  .colour-add input[type=text]{ width:120px; margin:0; padding:5px 7px; font-size:0.8rem; display:inline-block; }
+  .colour-add input[type=color]{ width:34px; height:28px; padding:0; border:none; background:none; vertical-align:middle; }
+  .colour-add button{ margin:0; padding:5px 9px; font-size:0.78rem; width:auto; }
+  .kw-list{ display:flex; flex-direction:column; gap:6px; max-height:60vh; overflow:auto; margin:8px 0; }
+  .kw-row{ display:flex; gap:8px; align-items:flex-start; border:1px solid var(--line); border-radius:10px; padding:6px 8px; font-size:0.8rem; background:#fff; }
+  .kw-row img{ width:56px; height:40px; object-fit:cover; border-radius:6px; flex:none; }
+  .kw-row .kw-old{ color:var(--muted); }
+  .kw-row .kw-new{ color:#1e5c3a; font-weight:600; }
+  .kw-row input{ width:auto; margin:4px 0 0; flex:none; }
   .o-group{ flex:1 1 100%; font-size:0.8rem; font-weight:700; color:#6a3fb0; background:#f1eafb; border-radius:8px; padding:4px 8px; }
   .addon-check-label{ display:inline-flex; align-items:center; gap:4px; font-size:0.82rem; color:var(--ink); }
   .addon-legacy-note{ font-size:0.78rem; color:var(--muted); font-style:italic; }
@@ -745,6 +773,13 @@
         <option value="all">All time</option>
       </select>
       <div id="salesStats">Loading…</div>
+    </div>
+
+    <div class="card" id="keywordsCard">
+      <h2 style="margin-top:0;font-size:1.1rem;">🏷️ Suggested keywords</h2>
+      <p class="hint">English keywords written from each sticker's picture, so customers can find them by what's on them ("sea turtle", "gold shells"…). <b>Your own keywords are kept</b> — only words that aren't there yet are added at the end. Nothing else changes (code, stock, status, photo stay the same).</p>
+      <button type="button" class="secondary" id="kwOpenBtn">👀 Check the suggestions</button>
+      <div id="kwBody"></div>
     </div>
 
     <div class="card" id="popularCard">
@@ -1559,7 +1594,7 @@
   // ---- Tabs: Orders · Stickers · Bottles & prices · Shop page · Tools ----
   const TABS = {
     orders: { cards: ['ordersCard', 'salesCard'], intro: 'Orders sent from the catalogue. Check them against WhatsApp, then Mark Paid (this takes the stickers off your stock).' },
-    stickers: { cards: ['addCard', 'existingCard', 'popularCard', 'categoriesCard', 'subcategoriesCard'], intro: 'Add new stickers, change existing ones (code, keyword, stock, photo, watermark, hide), and arrange categories.' },
+    stickers: { cards: ['addCard', 'existingCard', 'keywordsCard', 'popularCard', 'categoriesCard', 'subcategoriesCard'], intro: 'Add new stickers, change existing ones (code, keyword, stock, photo, watermark, hide), and arrange categories.' },
     products: { cards: ['tumblersCard', 'patternsCard', 'addonsCard', 'promoCard'], intro: 'Bottles, patterns, add-ons and the promotion — prices and what customers can pick.' },
     shop: { cards: ['liveCard', 'cataloguePhotosCard', 'searchesCard', 'visitsCard'], intro: 'Your live link, the photos on your catalogue page, what customers search for, and visits.' },
     tools: { cards: ['backupCard', 'githubPhotosCard', 'optimizeCard'], intro: 'Backups and photo tools — you only need these now and then.' },
@@ -3844,6 +3879,19 @@
     { id: 't8', label: '07 · 600ml Stainless Steel', detail: 'With Handle · Leak-Proof', price: 95, status: 'available' },
     { id: 't9', label: '08 · 1200ml Glow in the Dark Acrylic', detail: '', price: 109, status: 'available', no_glitter: true },
   ];
+  const DEFAULT_TUMBLER_COLOURS_ADMIN = {
+    t5: [{ name: 'Clear lid', hex: '#eef3f7' }, { name: 'Bamboo lid', hex: '#c99a62' }],
+    t6: [{ name: 'Black lid', hex: '#222222' }, { name: 'Hot Pink lid', hex: '#ff2d8a' }, { name: 'Light Pink lid', hex: '#f9c4d8' }, { name: 'Blue lid', hex: '#4a90d9' }, { name: 'White lid', hex: '#ffffff' }],
+    t7: [{ name: 'Black lid', hex: '#222222' }, { name: 'Light Pink lid', hex: '#f9c4d8' }, { name: 'Blue lid', hex: '#4a90d9' }, { name: 'Purple lid', hex: '#9b6fd6' }],
+    t9: [{ name: 'Green', hex: '#7ddc7d' }, { name: 'Orange', hex: '#f6a640' }, { name: 'Blue', hex: '#57b6f2' }],
+  };
+  // A style that never had colours saved gets the defaults above (same as the catalogue does).
+  const withDefaultColours = (t) => Array.isArray(t.colours) ? t : { ...t, colours: (DEFAULT_TUMBLER_COLOURS_ADMIN[t.id] || []).map(c => ({ ...c, status: 'available' })) };
+  const coloursOfTumblerText = (text) => {
+    const base = String(text || '').replace(PREORDER_SUFFIX, '');
+    const t = tumblerListAdmin.find(x => tumblerOrderText(x) === base);
+    return t ? (withDefaultColours(t).colours || []) : [];
+  };
   let tumblerListAdmin = DEFAULT_TUMBLERS.map(t => ({ ...t }));
   const tumblerOrderText = t => `${t.label} (RM${t.price})`;
   const PREORDER_SUFFIX = ' · Preorder';
@@ -3868,12 +3916,74 @@
     const code = selected || '';
     const known = allStickersAdmin.some(s => s.code === code);
     let opts = `<option value="">— select sticker —</option>`;
-    opts += allStickersAdmin.map(s => {
-      const label = `${s.code}${s.keyword ? ' — ' + s.keyword : ''} (${s.category}${s.subcategory ? '/' + s.subcategory : ''})`;
+    opts += allStickersAdmin.slice().sort(naturalCode).map(s => {
+      const label = `${s.code} (${s.category}${s.subcategory ? ' › ' + s.subcategory : ''})`;
       return `<option value="${s.code}" ${s.code === code ? 'selected' : ''}>${label}</option>`;
     }).join('');
     if (code && !known) opts += `<option value="${code}" selected>${code} (not found)</option>`;
     return opts;
+  }
+
+  // ---- 🖼️ Sticker picker for orders: a button with the sticker's picture; tapping it opens a
+  // grid of every sticker (grouped by category, in code order) with a search box. The original
+  // dropdown stays (hidden) underneath, so saving works exactly as before.
+  function stickerBtnInner(code){
+    const st = allStickersAdmin.find(x => x.code === code);
+    if (!code) return '<span class="sp-empty"></span><span>— choose —</span>';
+    return `${st ? `<img ${thumbOrFull(st.image_path)} alt="" loading="lazy" onerror="handleImgError(this)">` : '<span class="sp-empty"></span>'}<span><b>${escAttr(code)}</b>${st ? `<small>${escAttr(placeLabel({ category: st.category, subcategory: st.subcategory || null }))}</small>` : '<small>not found</small>'}</span>`;
+  }
+  function enhanceStickerSelects(root){
+    root.querySelectorAll('select.o-sticker, select.o-extra-sticker, select.o-promo-sticker').forEach(sel => {
+      if (sel.dataset.enhanced) return;
+      sel.dataset.enhanced = '1';
+      sel.style.display = 'none';
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'sp-btn'; btn.disabled = sel.disabled;
+      btn.innerHTML = stickerBtnInner(sel.value);
+      sel.after(btn);
+      btn.addEventListener('click', (e) => { e.stopPropagation(); openStickerPicker(sel, btn); });
+    });
+  }
+  let stickerPop = null;
+  function closeStickerPicker(){ if (stickerPop) { stickerPop.remove(); stickerPop = null; } }
+  document.addEventListener('click', (e) => { if (stickerPop && !stickerPop.contains(e.target)) closeStickerPicker(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeStickerPicker(); });
+  function openStickerPicker(sel, btn){
+    closeStickerPicker();
+    const pop = document.createElement('div');
+    pop.className = 'sp-pop';
+    pop.innerHTML = `<input type="search" placeholder="🔍 Type a code or name (e.g. H0, kuromi)…"><div class="sp-body"></div>${sel.classList.contains('o-sticker') ? '' : '<button type="button" class="secondary sp-clear" style="margin-top:8px;width:auto;padding:6px 10px;font-size:0.8rem;">✕ No sticker</button>'}`;
+    document.body.appendChild(pop);
+    const r = btn.getBoundingClientRect();
+    pop.style.top = (r.bottom + window.scrollY + 6) + 'px';
+    pop.style.left = Math.max(12, Math.min(r.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 12)) + 'px';
+    stickerPop = pop;
+    const body = pop.querySelector('.sp-body');
+    const draw = (q) => {
+      const ql = (q || '').trim().toLowerCase();
+      const list = allStickersAdmin.filter(st => !ql || [st.code, st.name, st.keyword, st.category, st.subcategory].some(v => (v || '').toLowerCase().includes(ql)));
+      const groups = new Map();
+      list.slice().sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.subcategory || '').localeCompare(b.subcategory || '') || naturalCode(a, b)).forEach(st => {
+        const k = placeLabel({ category: st.category, subcategory: st.subcategory || null });
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(st);
+      });
+      body.innerHTML = groups.size ? [...groups.entries()].map(([k, arr]) => `<div class="sp-grp">${escAttr(k)}</div><div class="sp-grid">${arr.map(st => `<button type="button" class="sp-item ${st.code === sel.value ? 'on' : ''} ${st.status === 'sold_out' ? 'sold' : ''}" data-code="${escAttr(st.code || '')}" title="${st.status === 'sold_out' ? 'Sold out' : ''}"><img ${thumbOrFull(st.image_path)} alt="" loading="lazy" onerror="handleImgError(this)">${escAttr(st.code || st.name)}${st.code === sel.value ? ' ✓' : ''}</button>`).join('')}</div>`).join('') : '<p class="hint">No sticker matches.</p>';
+      body.querySelectorAll('.sp-item').forEach(b => b.addEventListener('click', () => choose(b.dataset.code)));
+    };
+    const choose = (code) => {
+      if (code && ![...sel.options].some(o => o.value === code)) sel.add(new Option(code, code));
+      sel.value = code;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      btn.innerHTML = stickerBtnInner(code);
+      closeStickerPicker();
+    };
+    const input = pop.querySelector('input');
+    input.addEventListener('input', () => draw(input.value));
+    const clr = pop.querySelector('.sp-clear'); if (clr) clr.addEventListener('click', () => choose(''));
+    draw('');
+    input.focus();
+    const on = body.querySelector('.sp-item.on'); if (on) on.scrollIntoView({ block: 'center' });
   }
 
   // Mirrors index.html's PATTERN_OPTIONS — same manual-sync caveat as the tumbler list above.
@@ -4082,6 +4192,15 @@
     return `<span class="o-group">🥤 Bottle ${g.n} of ${g.of} · same customer, order #${g.tag}${all.length === g.of ? ` · whole order ${fmtRMAdmin(sum)}` : ''}</span>`;
   }
 
+  const COLOUR_RE = /^Colour:\s*(.+)$/i;
+  const orderColour = (addonsText) => { const seg = String(addonsText || '').split(',').map(x => x.trim()).find(x => COLOUR_RE.test(x)); return seg ? seg.match(COLOUR_RE)[1].trim() : ''; };
+  function colourOptionsHtml(tumblerText, value){
+    const list = coloursOfTumblerText(tumblerText).map(c => c.name);
+    if (!list.length && !value) return '<option value="">— no colour —</option>';
+    const vals = list.slice(); if (value && !vals.includes(value)) vals.push(value);
+    return '<option value="">— colour —</option>' + vals.map(v => `<option value="${escAttr(v)}" ${v === value ? 'selected' : ''}>🎨 ${escAttr(v)}</option>`).join('');
+  }
+
   function splitCustomName(parts){
     const nameSeg = parts.find(p => p.toLowerCase().startsWith(CUSTOM_NAME_PREFIX.toLowerCase()));
     const extraSegs = parts.filter(p => p.toLowerCase().startsWith(EXTRA_STICKER_PREFIX.toLowerCase()));
@@ -4105,7 +4224,7 @@
       const checked = parts.includes(label) ? 'checked' : '';
       return `<label class="addon-check-label"><input type="checkbox" class="o-addon-check" data-label="${label}" ${checked}> ${label}</label>`;
     }).join('');
-    const shownLeftover = leftover.filter(p => !MULTI_RE.test(p));
+    const shownLeftover = leftover.filter(p => !MULTI_RE.test(p) && !COLOUR_RE.test(p));
     const leftoverNote = leftover.length
       ? `<span class="addon-legacy-note" data-leftover="${leftover.join('|||')}">${shownLeftover.length ? `+ ${shownLeftover.join(', ')} (not in current add-on list)` : ''}</span>`
       : `<span class="addon-legacy-note" data-leftover=""></span>`;
@@ -4138,7 +4257,9 @@
     const promoBottle = promoInfo.filter(p => /^promo bottle:/i.test(p));
     const promoPattern = promoInfo.filter(p => /^promo pattern:/i.test(p));
     const promoParts = [...promoBottle, ...(promoSel && promoSel.value ? [`${PROMO_STICKER_PREFIX} ${promoSel.value}`] : []), ...promoPattern];
-    const combined = [...checked, ...(customName ? [`${CUSTOM_NAME_PREFIX} ${customName}`] : []), ...extras, ...promoParts, ...leftover];
+    const colourSel = row.querySelector('.o-colour');
+    const colourParts = colourSel && colourSel.value ? [`Colour: ${colourSel.value}`] : [];
+    const combined = [...colourParts, ...checked, ...(customName ? [`${CUSTOM_NAME_PREFIX} ${customName}`] : []), ...extras, ...promoParts, ...leftover.filter(p => !COLOUR_RE.test(p))];
     return combined.length ? combined.join(', ') : null;
   }
 
@@ -4264,6 +4385,7 @@
         <input type="text" class="o-name" value="${o.customer_name || ''}" placeholder="Name" disabled style="flex:1;min-width:90px;">
         <input type="text" class="o-tiktok" value="${o.tiktok_handle || ''}" placeholder="TikTok" disabled style="flex:1;min-width:90px;">
         <select class="o-tumbler" disabled style="flex:1;min-width:130px;">${tumblerOptionsHtml(o.tumbler)}</select>
+        <select class="o-colour" disabled>${colourOptionsHtml(o.tumbler, orderColour(o.addons))}</select>
         <select class="o-sticker" disabled style="min-width:130px;">${stickerOptionsHtml(o.sticker_code)}</select>
         <select class="o-pattern" disabled style="flex:1;min-width:130px;">${patternOptionsHtml(o.pattern)}</select>
         ${'delivery' in o ? `<select class="o-delivery" disabled style="flex:1;min-width:150px;">${deliveryOptionsHtml(o.delivery)}</select>` : ''}
@@ -4282,7 +4404,21 @@
     el.querySelectorAll('[data-id]').forEach(row => {
       const id = row.dataset.id;
       const order = data.find(o => o.id === id);
-      const fieldInputs = row.querySelectorAll('.o-name, .o-tiktok, .o-tumbler, .o-sticker, .o-pattern, .o-delivery, .o-addon-check, .o-custom-name, .o-extra-sticker, .o-promo-sticker');
+      const fieldInputs = () => row.querySelectorAll('.o-name, .o-tiktok, .o-tumbler, .o-colour, .o-sticker, .o-pattern, .o-delivery, .o-addon-check, .o-custom-name, .o-extra-sticker, .o-promo-sticker, .sp-btn');
+      const paidBtnEl = row.querySelector('.o-paid-btn');
+      const setEditing = (on) => {
+        paidBtnEl.disabled = on;
+        paidBtnEl.title = on ? 'Save your changes first' : '';
+        let note = row.querySelector('.o-paid-note');
+        if (on && !note) { note = document.createElement('span'); note.className = 'o-paid-note'; note.textContent = 'Save first, then Mark Paid'; row.querySelector('.row-actions').appendChild(note); }
+        if (!on && note) note.remove();
+      };
+      enhanceStickerSelects(row);
+      row.querySelector('.o-tumbler').addEventListener('change', (e) => {
+        const sel = row.querySelector('.o-colour');
+        const keep = coloursOfTumblerText(e.target.value).some(c => c.name === sel.value) ? sel.value : '';
+        sel.innerHTML = colourOptionsHtml(e.target.value, keep);
+      });
       refreshOrderRowTotal(row);
       row.addEventListener('change', () => {
         row.querySelectorAll('.extra-sticker-label').forEach(l => { l.dataset.empty = l.querySelector('select').value ? '0' : '1'; });
@@ -4292,13 +4428,17 @@
       const saveBtn = row.querySelector('.o-save-btn');
 
       editBtn.addEventListener('click', () => {
-        fieldInputs.forEach(inp => { inp.disabled = false; });
+        fieldInputs().forEach(inp => { inp.disabled = false; });
         editBtn.style.display = 'none';
         saveBtn.style.display = '';
+        setEditing(true);
         row.querySelector('.o-name').focus();
       });
 
       saveBtn.addEventListener('click', async () => {
+        const codesOf = (stickerCode, addons) => [stickerCode, ...extraStickerCodes(addons), promoStickerCode(addons)].filter(Boolean);
+        const oldCodes = codesOf(order.sticker_code, order.addons);
+        const newCodes = codesOf(row.querySelector('.o-sticker').value.trim() || null, readAddonsValue(row));
         const { error } = await client.from('orders').update({
           customer_name: row.querySelector('.o-name').value.trim() || null,
           tiktok_handle: row.querySelector('.o-tiktok').value.trim() || null,
@@ -4317,10 +4457,22 @@
         order.pattern = row.querySelector('.o-pattern').value.trim() || null;
         order.addons = readAddonsValue(row);
         if ('delivery' in order) order.delivery = (row.querySelector('.o-delivery') || {}).value || null;
-        fieldInputs.forEach(inp => { inp.disabled = true; });
+        fieldInputs().forEach(inp => { inp.disabled = true; });
         saveBtn.style.display = 'none';
         editBtn.style.display = '';
-        showToast('✅ Saved!');
+        setEditing(false);
+        // An order that's already Paid: changing its stickers moves the stock too
+        // (the old sticker goes back, the new one is taken off).
+        let stockMsg = '';
+        if (order.status === 'paid') {
+          const left = newCodes.slice(); const back = [];
+          oldCodes.forEach(c => { const i = left.indexOf(c); if (i >= 0) left.splice(i, 1); else back.push(c); });
+          const changes = [];
+          for (const c of back) { const w = await adjustStickerStock(c, +1); changes.push(`${c} +1`); if (w) changes.push(w); }
+          for (const c of left) { const w = await adjustStickerStock(c, -1); changes.push(`${c} −1`); if (w) changes.push(w); }
+          if (changes.length) stockMsg = ' · Stock updated: ' + changes.join(', ');
+        }
+        showToast('✅ Saved!' + stockMsg);
         renderSalesStats();
       });
 
@@ -4329,6 +4481,7 @@
       // misclick is never a dead end, per Evvyne's call.
       row.querySelector('.o-paid-btn').addEventListener('click', async (e) => {
         const btn = e.currentTarget;
+        if (saveBtn.style.display !== 'none') { showToast('Save your changes first, then Mark Paid', true); return; }
         const previousStatus = order.status;
         const newStatus = previousStatus === 'paid' ? 'pending' : 'paid';
         // Several tumblers from one customer: offer to mark the whole order in one go.
@@ -4563,7 +4716,7 @@
         if (extra) { count(stickers, extra[1]); count(addons, 'Extra sticker'); return; }
         const promoSticker = seg.match(/^Promo sticker:\s*([^\s(]+)/i);
         if (promoSticker) { count(stickers, promoSticker[1]); return; }
-        if (/^(Promo pattern|Name on tumbler|Multi-bottle order):/i.test(seg)) return;
+        if (/^(Promo pattern|Name on tumbler|Multi-bottle order|Colour):/i.test(seg)) return;
         count(addons, seg.replace(/\s*\(\+?RM[^)]*\)/i, '').trim());
       });
     });
@@ -4595,6 +4748,52 @@
   //   manual  = stickers Evvyne pushes herself (🔥 Push) — always shown
   //   auto_on = automatic list on/off
   // ==================================================================
+  // ---- 🏷️ Suggested keywords (written from each sticker's picture, Nov 2026) ----
+  const SUGGESTED_KEYWORDS = {"A001":"tinker bell, fairy, oval frame, green bow, yellow flowers, daisy, princess, disney","A002":"belle, beauty and the beast, book, reading, mrs potts, chip, teapot, lumiere, candle, cogsworth, clock, yellow dress, princess, disney","A003":"snow white, chibi, red bow, cherry, mickey ears, blue hearts, gold, princess, disney","A004":"belle, chibi, yellow dress, gold bow, mickey ears, gold, princess, disney","A005":"chibi princess, purple dress, purple bow, purple star, stars, bows, princess, disney","A006":"merida, brave, chibi, red curly hair, orange bow, green star, stars, bows, princess, disney","A007":"mulan, sword, pink dress, cherry blossom, sakura, butterfly, castle, heart, pink, princess, disney","A008":"rapunzel, tangled, pascal, chameleon, long hair, pink dress, butterfly, castle, heart, pink, princess, disney","A009":"ariel, little mermaid, starbucks, coffee order, checklist, seashell, octopus, mermaid, teal, princess, disney","A010":"alice, alice in wonderland, cheshire cat, mad hatter, white rabbit, tweedledee, tweedledum, queen of hearts, teapot, blue dress, disney","A011":"elsa, olaf, frozen, snowman, snowflake, blue star, cloud, chibi, winter, ice, blue, princess, disney","A012":"elsa, frozen, bows, pastel bow, pink bow, blue bow, heart, blue dress, princess, disney","AN001":"mofusand, shark cat, shark hoodie, cat, kitten, blue, kawaii, cute","AN002":"cat, kittens, blue bow, books, tulips, purple flowers, ribbon, milk tea, paw print, blue, purple, cozy","AN003":"mofusand, koala cat, koala, cat, eucalyptus, green leaves, grey, cute","AN004":"mofusand, panda cat, panda hoodie, cat, panda, green bow, paw print, bamboo, cute","AN005":"bunny, rabbit, bunnies, pink flowers, roses, floral, green leaves, cute","AN006":"mofusand, cat, shrimp, tempura, ebi fry, fried shrimp cat, orange, cute","AN007":"mofusand, shark cat, shark hoodie, cat, fish bone, blue, teal, orange cat, cute","AN008":"panda, pandas, bamboo, green bow, dumpling, bao, green, black and white, cute","AN009":"bee, bees, honey, honey jar, honey dipper, plaid bow, gingham, flowers, orange, cute","AN010":"frog, frogs, green, clover, flowers, lily pad, cute, kawaii","AN011":"cat, kitten, teacup, cup, paw print, fish bone, pink, purple, cute","AN012":"duck, duckling, pumpkin, autumn, fall, maple leaf, plaid bow, orange, yellow, cute","AN013":"duck, goose, baseball, scooter, baseball glove, bat, cap, blue bow, quote, cute","AN014":"duck, goose, witch hat, books, bookworm, my tbr is possessed, halloween, ghost, bat, purple, quote","AN015":"duck, goose, baseball, sneakers, drink cup, ticket, blue bow, red, cute","AN016":"frog, on my way to stir the pot, quote, daisy, black and white, funny, cute","AN017":"duck, ducklings, chick, yellow, bows, flowers, sunglasses, cute","AN018":"bee, sunflower, sunflowers, honey, yellow, brown, floral","AN019":"cat, cats, tabby cat, christmas, christmas lights, fairy lights, ornaments, santa hat, festive, cute","B001":"pooh, winnie the pooh, pooh bear, daisy, bee, honey pot, yellow, disney","B003":"tsum tsum, pooh, piglet, eeyore, tigger, roo, bees, honey, yellow, pastel, disney","B005":"pooh, piglet, eeyore, tigger, balloons, green balloons, clouds, sky, pastel, disney","B006":"pooh, piglet, eeyore, tigger, balloons, pink balloons, clouds, sky, pastel, disney","B007":"pooh, piglet, eeyore, tigger, balloons, yellow balloons, clouds, sky, pastel, disney","B008":"pooh, piglet, eeyore, tigger, balloons, purple balloons, lilac, clouds, sky, pastel, disney","B009":"pooh, piglet, eeyore, tigger, balloons, blue balloons, clouds, sky, pastel, disney","BTS001":"bts, bangtan, bangtan boys, arirang, kpop, k-pop, group photo, red heart, checkered, red, black, korean","BTS002":"bts, bangtan, bangtan boys, arirang, world tour, members, portraits, kpop, k-pop, checkered, korean","BTS003":"bts, bangtan, bangtan boys, arirang, world tour, red, black, stars, checkered, kpop, k-pop, korean","C001":"marie, aristocats, white cat, kitten, pink bow, music notes, hearts, stars, pastel, disney","C002":"marie, aristocats, white cat, kitten, pink bow, donut, strawberry, pink, disney","CR001":"cars, sports car, race car, formula 1, f1, truck, lorry, route 66, checkered flag, tyre, wheel, racing, black, red","CR002":"army jeep, jeep, sarge, cars, military, army, green, headphones, tools, shovel","CT001":"doraemon, space, astronaut, doraemon in space, rocket, planet, stars, blue, cartoon","CT002":"tom and jerry, tom, jerry, cat, mouse, bathtub, bubbles, cartoon","CT003":"cocomelon, jj, baby, music notes, colourful, kids, cartoon","CT004":"bluey, bingo, bandit, chilli, dog, puppy, blue, orange, flowers, kids, cartoon","CT005":"monsters inc, sulley, mike wazowski, boo, rainbow, stars, pastel, pixar, cartoon","CT006":"popeye, sailor, spinach, anchor, stars, olive oyl, cartoon","CT007":"anpanman, superhero, red, hearts, bee, kids, cartoon","CT008":"teletubbies, tinky winky, dipsy, laa-laa, po, ballet, tutu, pastel, kids, cartoon","CT009":"up, carl, russell, balloons, flying house, house, stars, colourful, pixar, cartoon","CT010":"smurfs, smurf, red car, car, blue, cartoon","CT011":"garfield, cat, orange cat, flowers, stars, cartoon","CT012":"tom and jerry, baby tom, baby jerry, cat, mouse, bunting, flags, cartoon","CT013":"pekkle, duck, white duck, sanrio, yellow, flowers, cute","CT014":"doraemon, nobita, shizuka, gian, suneo, dorami, friends, blue, cartoon","CT018":"barbie, come on barbie lets go party, i'm a barbie girl, high heels, handbag, lipstick, perfume, pink car, hearts, pink, black, girly","CT020":"mario, super mario, nintendo, mushroom, goomba, yoshi egg, koopa, piranha plant, star, question block, game, cartoon","CT022":"finding nemo, nemo, dory, crush, sea turtle, turtle, clownfish, fish, bubbles, ocean, blue, orange, pixar, cartoon","CT023":"gudetama, lazy egg, egg, chopsticks, bacon, fried egg, yellow, sparkles, sanrio, cute","CT025":"pikachu, pokemon, pokeball, lightning bolt, yellow, holographic, laser, game, cartoon","CT026":"we bare bears, grizzly, panda, ice bear, bears, butterfly, holographic, laser, cartoon","D001":"stitch, lilo and stitch, disney, hibiscus, flowers, pink flowers, red, blue","D002":"angel, stitch, lilo and stitch, pink, purple, est 2004, flowers, disney","D003":"stitch, starbucks, starbucks coffee, coffee cup, coffee order, checklist, valentine, hearts, candy, lollipop, red, pink, disney","D004":"stitch, los angeles, la, dodgers, baseball, hearts, navy, blue, disney","D005":"stitch, harry potter, hogwarts, platform 9 3/4, wizard, magic, broom, owl, deathly hallows, black and white, disney","D006":"stitch, puzzle pieces, autism awareness, colourful, rainbow, disney","D007":"stitch, flowers, daisy, pink, blue, purple, simple, disney","D008":"stitch, harry potter, gryffindor scarf, glasses, hogwarts, platform 9 3/4, wizard, owl, black and white, disney","D009":"stitch, ukulele, sunglasses, rainbow, hearts, flowers, pastel, colourful, disney","DC001":"batman, dc, dc comics, superhero, bat signal, joker, dark, black, red","DG001":"dreamy girl, girl, cat, cats, kitten, pink bow, tulips, cherries, milk tea, pink, girly, illustration","DG002":"dreamy girl, girl, flowers, floral, pink flowers, butterfly, pink drink, books, pink, girly, illustration","E001":"mickey, minnie, couple, louis vuitton, lv, monogram, gold, glitter heart, brown, luxury, disney","E002":"mickey, mickey mouse, vintage mickey, classic, sparkles, stars, black and white, monochrome, disney","E003":"mickey, minnie, sailor, captain, ship wheel, anchor, life ring, nautical, compass, disney","E004":"mickey, disneyland, snacks, churro, ice cream, popcorn, mickey ears, balloons, pretzel, burger, colourful, disney","E005":"mickey, minnie, baby mickey, baby minnie, donald, starbucks, coffee, pink, disney","E006":"mickey, detective, sherlock, magnifying glass, plaid coat, gold, stars, disney","F001":"alien, aliens, little green men, toy story, green star, stars, green, pixar, disney","F002":"buzz lightyear, buzz, astronaut, space ranger, blue star, stars, toy story, pixar, disney","F003":"lotso, strawberry bear, pink bear, lucky, so happy, hello, toy story, pink, pixar, disney","F004":"woody, jessie, bullseye, cowboy, sheriff, cowboy hat, horseshoe, lasso, western, toy story, pixar, disney","FR001":"fairy, pink fairy, girl, pink flowers, roses, bows, butterflies, pink, pastel","FR002":"fairy, purple fairy, girl, lavender, purple flowers, white cat, butterflies, purple, lilac","FR003":"fairy, flower fairy, cherries, cherry, white flowers, cherry blossom, flower wreath, hearts, red, green","FR004":"fairy, flower crown, peony, pink peony, pink flowers, roses, butterflies, pink, purple","FR005":"fairy, sun hat, white cat, cat, orange roses, flowers, butterflies, peach, orange, yellow","FR006":"fairy, dark fairy, black wings, black butterflies, gown, gothic, black, silver","FR007":"fairy, sun hat, tulips, pink tulips, white butterflies, flower crown, pastel, pink, cream","FR008":"fairy, blue fairy, hyacinth, blue flowers, beetle, blue butterflies, blue","FR009":"fairy, purple fairy, lilac, wisteria, purple flowers, purple butterflies, purple","FR010":"fairy, blue fairy, dark hair, blue flowers, forget me not, blue butterflies, navy, blue","FR011":"mermaid tail, mermaid, ocean, waves, splash, seashells, starfish, coral, blue, teal","G001":"hello kitty, kitty, sanrio, pink bow, pink dress, glitter heart, pink hearts, stars, pink","G002":"hello kitty, kitty, sanrio, leopard print, leopard bow, leopard heart, blue stars, wink, brown, blue","G003":"hello kitty, kitty, sanrio, gucci, shopping bags, luxury, brand, beige, brown, pink bow","G004":"hello kitty, kitty, sanrio, minimal, simple, red bows, border, white, red","H002":"kuromi, sanrio, astronaut, space, moon, planet, ufo, stars, purple, white","HN001":"hirono, popmart, pop mart, boy, cap, little mischief, yellow, blue, art toy","HP001":"harry potter, hogwarts, hogwarts crest, always, deathly hallows, wizard, magic, owl letter, wand, witch hat, holographic, laser","HR001":"skull, skulls, purple flowers, crescent moon, moon, gothic, spooky, halloween, black, purple","HR002":"skull, mushroom, mushrooms, moon, stars, hearts, flowers, gothic, spooky, black, pink","HR003":"chucky, horror, childs play, doll, knife, bats, red stars, handprints, halloween, red, black","HR004":"chucky, horror, childs play, doll, knife, bats, stars, handprints, neon, colourful, halloween","HR005":"not sweet not your little pumpkin, pumpkin, jack o lantern, pin up girl, witch, quote, halloween, orange, black","HR006":"too hot to haunt, pin up girl, witch, moon, bats, tombstone, quote, halloween, orange, black","HR007":"witches, witch, witch hat, witch boots, potion, black cat, spell book, broom, halloween, pink, black","HR008":"ghostface, ghost face, scream, horror, red roses, white flowers, knife, halloween, black, red","HR009":"joker, pumpkins, jack o lantern, skulls, bats, red balloon, horror, halloween, purple, orange","I001":"my melody, melody, sanrio, pink bow, blue bow, balloons, flowers, rainbow, pink, pastel","J001":"pochacco, sanrio, dog, puppy, ice cream, banana, chick, swim ring, blue, yellow","J002":"pochacco, sanrio, dog, puppy, sandcastle, beach, summer, friends, chick, brown","K002":"little twin stars, kiki, lala, sanrio, crescent moon, moon, stars, umbrella, pastel, yellow, pink, blue","L001":"labubu, popmart, pop mart, la dodgers, dodgers, los angeles, baseball, bucket hat, bows, blue","L002":"labubu, popmart, pop mart, black bunny, pink bows, skulls, sparkles, black, pink","L003":"labubu, popmart, pop mart, chanel, cc logo, blue bows, hearts, baby blue, luxury","L004":"labubu, popmart, pop mart, chanel, camellia, black flowers, bucket hat, black, white, luxury","L005":"labubu, popmart, pop mart, chanel, camellia, bows, white, black, luxury","L006":"labubu, tycoco, popmart, pop mart, skeleton, skull, flowers, book, brown, black, pink","L007":"labubu, popmart, pop mart, three labubu, trio, daisies, daisy, holographic, laser, silver, pastel","M001":"twinkle twinkle, popmart, pop mart, bubble gum, red beanie, apple, crescent moon, stars, red, yellow","M002":"twinkle twinkle, popmart, pop mart, music notes, pineapple, lollipop, stars, orange, yellow","M003":"twinkle twinkle, popmart, pop mart, candle, bubble gum, stars, music notes, pastel","M004":"twinkle twinkle, popmart, pop mart, yellow hood, bunny, stars, sparkles, pastel, yellow","M005":"twinkle twinkle, popmart, pop mart, yellow hat, hearts, rainbow, stars, pink, yellow","M006":"twinkle twinkle, popmart, pop mart, characters, friends, colourful, stars, red, yellow","M007":"twinkle twinkle, popmart, pop mart, white beanie, chocolate cake, bed, sleep, rainbow, stars, pastel","M008":"twinkle twinkle, popmart, pop mart, bubble gum, red beanie, crescent moon, apple, stars, blue, red","M009":"twinkle twinkle, popmart, pop mart, yellow raincoat, mailbox, letter, blue stars, hearts, red, yellow","M010":"twinkle twinkle, popmart, pop mart, orange, seesaw, stars, fall, autumn, orange, yellow","M011":"twinkle twinkle, popmart, pop mart, bath, bathtub, bubbles, hearts, band aid, stars, pink, pastel","M012":"twinkle twinkle, popmart, pop mart, rubber duck, duck, bath, bubbles, yellow, blue","MC001":"monchhichi, monkey, frog hat, green, plaid bow, cake, cute, brown","MC002":"monchhichi, monkey, cat hat, black cat, pink, bows, cute, brown","MC003":"monchhichi, monkey, leopard print, leopard hoodie, stars, hearts, brown, cute","ML001":"molly, popmart, pop mart, erosion molly, purple, pink, art toy","N001":"crybaby, cry baby, popmart, pop mart, leopard print, leopard hearts, diamonds, tears, brown, orange","O001":"skullpanda, popmart, pop mart, headphones, music notes, purple bows, blue stars, blue, purple","O002":"skullpanda, popmart, pop mart, headphones, neon green, lime, green bows, green hearts, stars, black","O003":"skullpanda, popmart, pop mart, purple bows, pink bows, hearts, stars, navy, purple, pink","O004":"skullpanda, popmart, pop mart, louis vuitton, lv, monogram, puffer jacket, grey, silver, luxury","OC001":"sea turtle, turtle, seahorse, starfish, fish, black, monochrome, ocean, sea","OC002":"mermaid tail, mermaid, teal, blue, purple, coral, jellyfish, starfish, bubbles, ocean, sea","OC003":"seashell, shells, pink bows, bows, starfish, pearls, pink, pastel, coquette, ocean","OC004":"seashell, shells, yellow, gold, pink bows, bows, pearls, starfish, ocean, beach","OC005":"mermaid tail, mermaid, purple, blue, holographic, coral, starfish, ocean, sea","OC006":"seahorse, starfish, seashell, coral, purple, pink, teal, ocean, sea","P001":"spiderman, spider-man, marvel, superhero, speech bubbles, hello, thank you, nice to meet you, comic, red, blue","P002":"spiderman, spider-man, marvel, superhero, spider web, city skyline, red, blue","PP001":"powerpuff girls, blossom, bubbles, buttercup, red flowers, pink hearts, hearts, red, pink","PP002":"powerpuff girls, blossom, bubbles, buttercup, bunny ears, easter, easter eggs, carrot, pastel","PP003":"powerpuff girls, blossom, bubbles, buttercup, stars, colourful, rainbow","PP004":"powerpuff girls, blossom, bubbles, buttercup, black bows, broken hearts, lightning, red, black, edgy","Q001":"nick wilde, zootopia, fox, starbucks, starbucks coffee, coffee order, checklist, brown flowers, brown, orange, disney","Q002":"judy hopps, zootopia, bunny, rabbit, starbucks, starbucks coffee, coffee order, checklist, blue flowers, blue, disney","Q004":"flash, sloth, judy hopps, nick wilde, clawhauser, zootopia, purple flowers, pastel, disney","R001":"demon slayer, tanjiro, nezuko, zenitsu, chibi, stars, kimetsu no yaiba, anime","R002":"demon slayer, tanjiro, nezuko, sword, katana, water breathing, kimetsu no yaiba, anime","S003":"shin chan, crayon shinchan, fries, burger, fast food, mcdonalds, red, yellow, anime","S004":"shin chan, crayon shinchan, red, pink, cute, anime","S005":"shin chan, crayon shinchan, pink, pastel, cute, anime","SD001":"slam dunk, shohoku, sakuragi, rukawa, akagi, mitsui, basketball, team, red, anime","SP002":"snoopy, woodstock, peanuts, stars, black and white, monochrome, cartoon","SP004":"snoopy, woodstock, peanuts, music notes, have a happy day, orange, yellow, cartoon","T001":"huntrix, kpop demon hunters, rumi, mira, zoey, lightning, crowns, hearts, stars, purple, k-pop","T002":"huntrix, kpop demon hunters, mira, chibi, purple star, stars, purple, black, k-pop","T004":"huntrix, kpop demon hunters, rumi, mira, zoey, purple hearts, galaxy, purple, blue, k-pop","SP001":"snoopy, woodstock, peanuts, school bus, bus stop, yellow bus, sun, clouds, cartoon","SP003":"snoopy, woodstock, peanuts, coffee, coffee beans, heartbeat, brown, cartoon","SP005":"snoopy, woodstock, peanuts, flying ace, pilot, airplane, plane, clouds, sky, cartoon","SS001":"spongebob, spongebob squarepants, patrick, squidward, jellyfish, krabby patty, picnic, yellow, pink, cartoon","SS002":"spongebob, spongebob squarepants, birthday, balloons, flowers, stars, yellow, orange, cartoon","T003":"huntrix, kpop demon hunters, rumi, mira, zoey, headphones, cassette, skateboard, neon, purple, pink, k-pop","TR001":"totoro, my neighbor totoro, catbus, mei, acorns, umbrella, mushroom, leaves, tree branch, ghibli, anime","U001":"one piece, luffy, monkey d luffy, straw hat, pirate, jolly roger, wanted poster, anime","U002":"one piece, zoro, roronoa zoro, chopper, tony tony chopper, sword, cherry blossom, stars, green, anime","B002":"eeyore, starbucks, coffee order, checklist, daisies, flowers, pastel, pink, blue, disney","B004":"pooh, tigger, winnie the pooh, red flowers, stars, yellow, orange, disney","CT015":"cookie monster, sesame street, cookies, chocolate chip cookies, googly eyes, blue, cartoon","CT016":"elmo, sesame street, red, green, cartoon","CT017":"barbie, come on barbie lets go party, pink hearts, hearts, pink, girly","CT019":"garfield, pooky, teddy bear, red bows, hearts, valentine, red, orange, cartoon","CT021":"capybara, kapibara, onsen, hot spring, bath, bathtub, hearts, pink, brown, cute","CT024":"hangyodon, sanrio, fish, octopus, stars, teal, orange, cute","H001":"kuromi, sanrio, umbrella, pink umbrella, stars, black, pink, punk","I002":"my melody, melody, sanrio, pink hearts, heart frame, bows, flowers, pink, pastel","K001":"little twin stars, kiki, lala, sanrio, christmas tree, christmas, unicorn, clouds, stars, pastel, pink, blue","Q003":"nick wilde, judy hopps, zootopia, fox, bunny, police, hearts, couple, disney","S001":"shin chan, crayon shinchan, ok, thumbs up, sun, stars, green, yellow, anime","S002":"shin chan, crayon shinchan, shiro, dog, white dog, puppy, kazama, friends, stars, anime","V001":"jujutsu kaisen, gojo, gojo satoru, blindfold, panda, chibi, stars, black, white, anime","V002":"jujutsu kaisen, yuji itadori, itadori, chibi, orange stars, stars, orange, anime","W001":"chelsea, chelsea fc, football, soccer, football club, crest, blue, premier league, epl","W002":"arsenal, arsenal fc, football, soccer, football club, crest, gunners, red, premier league, epl","W003":"manchester united, man united, man utd, red devils, football, soccer, crest, red, premier league, epl","W004":"liverpool, liverpool fc, lfc, you'll never walk alone, football, soccer, crest, green, red, premier league, epl","WE001":"wednesday, wednesday addams, addams family, gothic, skulls, bats, tombstone, purple, black","X001":"betty boop, oreo, cookies, cookie, milk splash, pin up, black, brown, white","X002":"betty boop, louis vuitton, lv, monogram, brown hat, brown, luxury, pin up","X003":"betty boop, louis vuitton, lv, drip, sneakers, pink, black, white, luxury, pin up","X004":"betty boop, louis vuitton, lv, monogram flowers, pink outfit, black, white, pink, luxury, pin up","Y001":"louis vuitton, lv, monogram, bow, big bow, burgundy, maroon, dark red, luxury, brand","Y002":"louis vuitton, lv, monogram, bow, big bow, purple, plum, luxury, brand","Y003":"chanel, ghost, butterflies, blue butterflies, handbags, sneakers, bucket hat, navy, holographic, laser, luxury, brand","Y004":"louis vuitton, lv, monogram, bow, pink bow, dark pink, holographic, laser, luxury, brand","Y005":"louis vuitton, lv, monogram, bow, light pink, pink, holographic, laser, luxury, brand","Y006":"chanel, cc logo, bows, pink, holographic, laser, luxury, brand","Y007":"lee cooper, teddy bear, bear, sunglasses, smiley face, stars, black, brand","Y008":"chanel, cc logo, black bow, pink bow, hearts, pink, black, luxury, brand","Z001":"cherry, cherries, hearts, red, simple, minimal, fruit","Z002":"strawberry, strawberries, fruit, red, simple","Z003":"bows, ribbons, pink bows, light pink, coquette, simple, minimal","Z004":"bubble tea, boba, milk tea, pearl milk tea, drink, stars, leaves, peach, pink","Z005":"cat, cat silhouette, pink stars, stars, pink oval, pink, minimal","Z006":"hearts, bows, ribbons, coquette, peach, red, pink, simple","Z007":"mama needs coffee, mama, mom, mother, coffee, quote, daisies, flowers, black and white","Z008":"panda, panda faces, pink flowers, sakura, black and white, pink, cute","Z009":"dog, puppy, spaniel, cocker spaniel, pink bow, bows, flowers, pink, coquette","Z010":"cat, kittens, shark, shark costume, fish, paw print, blue, orange, cute","Z011":"strawberry, strawberries, flowers, hearts, red, pink, fruit","Z013":"bee, bees, daisy, daisies, honeycomb, honey, yellow, flowers","Z014":"butterfly, butterflies, clover, pastel, pink, purple, lilac, line art","Z016":"cat, kittens, strawberry, strawberries, leaves, red, cute","Z017":"iced coffee, coffee, latte, pink bows, bows, checkered, on the rocks, pink, holographic, laser","Z018":"in my matcha era, matcha, matcha latte, bubble tea, purple bows, daisies, quote, green, purple","Z019":"unicorn, unicorns, unicorn head, pink, flowers, hearts, rainbow, magical","Z020":"bows, ribbons, pink bows, black hearts, hearts, coquette, pink, black","Z021":"watermelon, watermelon slices, fruit, daisies, flowers, summer, red, green","Z022":"busy doing mom things, mom, mum, mother, tiktok, phone, shopping, parcel, pepsi, quote, pink, purple","Z023":"bows, leopard print, leopard bow, diamonds, pearls, bling, brown, gold, luxury","Z024":"bows, blue bow, diamonds, pearls, bling, blue, navy, silver","Z025":"baking, bake, cook, cooking, hijab girl, malay girl, tudung, mixer, cookies, cake, kitchen, pink, cream","Z026":"donut, doughnut, pink donut, sprinkles, cupcake, cake, cookies, sweets, pink, cute","Z027":"leopard print, leopard heart, black bows, cherries, cherry, red bows, stars, red, black","Z028":"miffy, bunny, rabbit, beanie, maple leaves, autumn, fall, handbag, stars, brown, orange","Z012":"kiwi, kiwi fruit, fruit, leaves, tropical, palm leaves, green, brown","Z015":"sunflower, sunflowers, butterfly, butterflies, yellow, brown, flowers"};
+  const kwSplit = (t) => String(t || '').split(/[,，]/).map(w => w.trim()).filter(Boolean);
+  function keywordAdditions(st){
+    const sug = SUGGESTED_KEYWORDS[st.code];
+    if (!sug) return [];
+    const have = new Set(kwSplit(st.keyword).map(w => w.toLowerCase()));
+    const out = [];
+    kwSplit(sug).forEach(w => { const k = w.toLowerCase(); if (!have.has(k)) { have.add(k); out.push(w); } });
+    return out;
+  }
+  function renderKeywordSuggestions(){
+    const body = document.getElementById('kwBody');
+    const todo = allStickersAdmin.filter(st => keywordAdditions(st).length).sort(naturalCode);
+    if (!todo.length) { body.innerHTML = '<p class="hint" style="margin:10px 0 0;">✅ Every sticker already has these keywords.</p>'; return; }
+    const empty = todo.filter(st => !kwSplit(st.keyword).length).length;
+    body.innerHTML = `
+      <p class="hint" style="margin:10px 0 0;">${todo.length} sticker${todo.length === 1 ? '' : 's'} can get new keywords${empty ? ` (${empty} of them have none yet)` : ''}. Untick any you don't want, then press Add.</p>
+      <label style="font-weight:600;margin:6px 0;"><input type="checkbox" id="kwAll" checked style="width:auto;"> Select all</label>
+      <div class="kw-list">${todo.map(st => `<label class="kw-row" data-id="${st.id}"><input type="checkbox" class="kw-check" checked><img ${thumbOrFull(st.image_path)} alt="" loading="lazy" onerror="handleImgError(this)"><span><b>${escAttr(st.code)}</b> <span class="kw-old">${escAttr(st.keyword || '(no keywords yet)')}</span><br><span class="kw-new">+ ${escAttr(keywordAdditions(st).join(', '))}</span></span></label>`).join('')}</div>
+      <button type="button" id="kwApplyBtn">🏷️ Add keywords to ticked stickers</button>`;
+    const checks = () => [...body.querySelectorAll('.kw-check')];
+    document.getElementById('kwAll').addEventListener('change', (e) => { checks().forEach(c => { c.checked = e.target.checked; }); });
+    document.getElementById('kwApplyBtn').addEventListener('click', async () => {
+      const ids = checks().filter(c => c.checked).map(c => c.closest('.kw-row').dataset.id);
+      if (!ids.length) { showToast('Tick at least one sticker', true); return; }
+      if (!confirm(`Add the new keywords to ${ids.length} sticker${ids.length === 1 ? '' : 's'}?\n\nYour own keywords stay. Only the keyword box changes — stock, codes and everything else stay the same.`)) return;
+      const btn = document.getElementById('kwApplyBtn'); btn.disabled = true;
+      let ok = 0; const failed = [];
+      for (const id of ids) {
+        const st = allStickersAdmin.find(x => x.id === id);
+        if (!st) continue;
+        const add = keywordAdditions(st);
+        if (!add.length) continue;
+        const next = [...kwSplit(st.keyword), ...add].join(', ');
+        btn.textContent = `Adding… ${ok + failed.length + 1} of ${ids.length}`;
+        const { error } = await client.from('stickers').update({ keyword: next }).eq('id', id); // keyword only
+        if (error) { failed.push(st.code); continue; }
+        st.keyword = next; ok++;
+      }
+      showToast(failed.length ? `Added keywords to ${ok} · couldn't: ${failed.join(', ')}` : `🏷️ Keywords added to ${ok} sticker${ok === 1 ? '' : 's'}`, !!failed.length);
+      renderKeywordSuggestions();
+    });
+  }
+  document.getElementById('kwOpenBtn').addEventListener('click', () => { renderKeywordSuggestions(); document.getElementById('kwOpenBtn').style.display = 'none'; });
+
   const POPULAR_DAYS = 30, POPULAR_TOP = 8, POPULAR_MIN_SOLD = 2;
   let popularAdmin = { auto_on: true, auto: [], manual: [] };
   let popularLoaded = false, ordersLoadedOnce = false;
@@ -5097,6 +5296,10 @@
           <option value="preorder" ${t.status === 'preorder' ? 'selected' : ''}>Preorder</option>
           <option value="sold_out" ${t.status === 'sold_out' ? 'selected' : ''}>Sold Out</option>
         </select>
+        <div class="colour-edit">🎨
+          ${(t.colours || []).map((c, ci) => `<span class="colour-chip ${c.status === 'sold_out' ? 'sold' : ''}" data-ci="${ci}"><i style="background:${escAttr(c.hex || '#ddd')}"></i>${escAttr(c.name)}${c.status === 'sold_out' ? ' · sold out' : ''}<button type="button" class="c-sold" title="Sold out on / off">${c.status === 'sold_out' ? '↺' : '⊘'}</button><button type="button" class="c-del" title="Remove">✕</button></span>`).join('') || '<span class="hint" style="margin:0;">No colours — customers won\'t be asked</span>'}
+          <span class="colour-add"><input type="text" class="c-name" placeholder="New colour"><input type="color" class="c-hex" value="#f9c4d8"><button type="button" class="secondary c-add">+ colour</button></span>
+        </div>
         <div class="row-actions">
           <button type="button" class="secondary t-up" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="secondary t-down" title="Move down" ${i === tumblerListAdmin.length - 1 ? 'disabled' : ''}>↓</button>
@@ -5111,6 +5314,19 @@
       row.querySelector('.t-price').addEventListener('input', e => { t.price = e.target.value === '' ? '' : Number(e.target.value); });
       row.querySelector('.t-status').addEventListener('change', e => { t.status = e.target.value; row.classList.remove('is-available', 'is-preorder', 'is-sold_out'); row.classList.add(`is-${t.status}`); });
 
+      row.querySelectorAll('.colour-chip').forEach(ch => {
+        const ci = Number(ch.dataset.ci);
+        ch.querySelector('.c-del').addEventListener('click', () => { t.colours.splice(ci, 1); renderTumblerRows(); });
+        ch.querySelector('.c-sold').addEventListener('click', () => { const c = t.colours[ci]; c.status = c.status === 'sold_out' ? 'available' : 'sold_out'; renderTumblerRows(); });
+      });
+      row.querySelector('.c-add').addEventListener('click', () => {
+        const name = row.querySelector('.c-name').value.replace(/[,，]/g, ' ').trim();
+        if (!name) { showToast('Type the colour name first', true); return; }
+        t.colours = Array.isArray(t.colours) ? t.colours : [];
+        if (t.colours.some(c => c.name.toLowerCase() === name.toLowerCase())) { showToast('That colour is already there', true); return; }
+        t.colours.push({ name, hex: row.querySelector('.c-hex').value, status: 'available' });
+        renderTumblerRows();
+      });
       row.querySelector('.t-up').addEventListener('click', () => { [tumblerListAdmin[i - 1], tumblerListAdmin[i]] = [tumblerListAdmin[i], tumblerListAdmin[i - 1]]; renderTumblerRows(); });
       row.querySelector('.t-down').addEventListener('click', () => { [tumblerListAdmin[i + 1], tumblerListAdmin[i]] = [tumblerListAdmin[i], tumblerListAdmin[i + 1]]; renderTumblerRows(); });
       row.querySelector('.t-remove').addEventListener('click', () => {
@@ -5132,7 +5348,7 @@
     tumblersTableReady = true;
     const row = (data || []).find(r => r.key === 'tumblers');
     const list = row && row.value && Array.isArray(row.value.list) ? row.value.list : null;
-    if (list && list.length) tumblerListAdmin = list.map(t => ({ ...t }));
+    if (list && list.length) tumblerListAdmin = list.map(t => withDefaultColours({ ...t }));
     msg.textContent = row && row.updated_at ? `Last saved ${new Date(row.updated_at).toLocaleString()}` : 'Showing the current styles — press Save tumblers once to start managing them here.';
     renderTumblerRows();
   }
@@ -5143,7 +5359,7 @@
     if (!confirm('Fill in the new 8 bottles below?' + (removed.length ? `\n\nThis takes off: ${removed.join(', ')} (past orders keep their details).` : '') + '\n\nNothing changes for customers until you press Save tumblers.')) return;
     tumblerListAdmin = DEFAULT_TUMBLERS.map(d => {
       const old = tumblerListAdmin.find(t => t.id === d.id);
-      return { ...d, status: old ? old.status : d.status };
+      return withDefaultColours({ ...d, status: old ? old.status : d.status, ...(old && Array.isArray(old.colours) ? { colours: old.colours } : {}) });
     });
     renderTumblerRows();
     if (!patternsSavedOnce) { patternListAdmin = buildDefaultPatterns(); renderPatternRows(); }
@@ -5163,7 +5379,7 @@
     if (bad) { showToast('Every style needs a name and a price (a number)', true); return; }
     const badGlitter = list.find(t => t.glitter_price !== undefined && t.glitter_price !== '' && (!Number.isFinite(Number(t.glitter_price)) || Number(t.glitter_price) < 0));
     if (badGlitter) { showToast('Glitter +RM must be a number (or leave it empty for +RM5)', true); return; }
-    const clean = list.map(t => ({ id: t.id, label: t.label, detail: t.detail, price: Number(t.price), status: t.status || 'available', glitter_price: glitterPriceOf({ ...t, glitter_price: t.glitter_price === '' ? GLITTER_DEFAULT_PRICE : t.glitter_price }), ...(t.no_glitter ? { no_glitter: true } : {}) }));
+    const clean = list.map(t => ({ id: t.id, label: t.label, detail: t.detail, price: Number(t.price), status: t.status || 'available', glitter_price: glitterPriceOf({ ...t, glitter_price: t.glitter_price === '' ? GLITTER_DEFAULT_PRICE : t.glitter_price }), ...(t.no_glitter ? { no_glitter: true } : {}), colours: (t.colours || []).map(c => ({ name: c.name, hex: c.hex || '#dddddd', status: c.status === 'sold_out' ? 'sold_out' : 'available' })) }));
     const { error } = await client.from('settings').upsert({ key: 'tumblers', value: { list: clean }, updated_at: new Date().toISOString() });
     if (error) { showToast(error.message, true); return; }
     tumblerListAdmin = clean;

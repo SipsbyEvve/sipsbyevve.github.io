@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-03-1">
+<meta name="sbe-build" content="2026-11-09-1">
 <title>Sips by Evve — Custom Snowglobe Tumblers Catalogue</title>
 <meta property="og:title" content="Sips by Evve — Custom Snowglobe Tumblers Catalogue">
 <meta property="og:description" content="Pick your tumbler, sticker &amp; pattern, then send your order on WhatsApp 🎀 Free shipping West Malaysia.">
@@ -266,6 +266,13 @@
   }
 
   .option-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:14px; }
+  .tumbler-colours{ grid-column:1/-1; background:#fff; border:2px solid var(--wa-dark); border-radius:var(--radius); padding:10px 12px; }
+  .tumbler-colours .tc-lbl{ font-weight:800; font-size:0.86rem; margin-bottom:8px; }
+  .tumbler-colours .tc-lbl.missing{ color:#b0452f; }
+  .tc-sw{ display:inline-flex; align-items:center; gap:6px; border:2px solid var(--line); border-radius:999px; padding:5px 12px 5px 6px; margin:0 6px 6px 0; font-size:0.82rem; font-weight:700; background:#fff; font-family:inherit; color:var(--ink); cursor:pointer; }
+  .tc-sw i{ width:20px; height:20px; border-radius:50%; display:inline-block; border:1px solid rgba(0,0,0,0.18); flex:none; }
+  .tc-sw.on{ border-color:var(--wa-dark); background:#e8f9ee; }
+  .tc-sw.sold{ opacity:0.4; text-decoration:line-through; cursor:default; }
   .option-card{
     border:2px solid var(--line); border-radius:14px; padding:12px; text-align:center; background:var(--card);
     cursor:pointer; position:relative; box-shadow:var(--shadow); transition:border-color 0.15s, box-shadow 0.15s;
@@ -1143,6 +1150,22 @@
   ];
   // How a tumbler is written in the order message / saved order, e.g.
   // "04 · 600ml Stainless Steel (RM85)" — plus " · Preorder" when it's a preorder style.
+  // Colours (lids / bottle colour) per tumbler style. Evvyne edits them in admin (🥤 Tumblers →
+  // colours); these are used for styles that haven't had colours saved there yet.
+  const DEFAULT_TUMBLER_COLOURS = {
+    t5: [{ name: 'Clear lid', hex: '#eef3f7' }, { name: 'Bamboo lid', hex: '#c99a62' }],
+    t6: [{ name: 'Black lid', hex: '#222222' }, { name: 'Hot Pink lid', hex: '#ff2d8a' }, { name: 'Light Pink lid', hex: '#f9c4d8' }, { name: 'Blue lid', hex: '#4a90d9' }, { name: 'White lid', hex: '#ffffff' }],
+    t7: [{ name: 'Black lid', hex: '#222222' }, { name: 'Light Pink lid', hex: '#f9c4d8' }, { name: 'Blue lid', hex: '#4a90d9' }, { name: 'Purple lid', hex: '#9b6fd6' }],
+    t9: [{ name: 'Green', hex: '#7ddc7d' }, { name: 'Orange', hex: '#f6a640' }, { name: 'Blue', hex: '#57b6f2' }],
+  };
+  function tumblerColours(t){
+    if (!t) return [];
+    const list = Array.isArray(t.colours) ? t.colours : (DEFAULT_TUMBLER_COLOURS[t.id] || []);
+    return list.filter(c => c && c.name).map(c => ({ name: String(c.name), hex: c.hex || '#dddddd', status: c.status === 'sold_out' ? 'sold_out' : 'available' }));
+  }
+  const tumblerNeedsColour = (t) => tumblerColours(t).some(c => c.status !== 'sold_out');
+  const escTc = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let colourWarn = false; // turns the "Choose a colour" title red after a Send without one
   function tumblerText(t){
     if (!t) return '';
     return `${t.label} (RM${t.price})${t.status === 'preorder' ? ' · Preorder' : ''}`;
@@ -1255,20 +1278,20 @@
   const EXTRA_STICKER_PRICE = 7;
   const MAX_EXTRA_STICKERS = 1;
 
-  const myOrder = { tumbler: null, sticker: null, pattern: null, addons: [], delivery: null, customName: '', extraOn: false, extraStickers: [],
+  const myOrder = { tumbler: null, colour: null, sticker: null, pattern: null, addons: [], delivery: null, customName: '', extraOn: false, extraStickers: [],
                     promo: { on: false, sticker: null, pattern: null } };
 
   // ---- Several tumblers in one order ----
   // myOrder always holds the bottle being chosen right now. The other bottles are kept in
   // `bottles` (bottles[cur] is a stale copy of the current one — allBottles() refreshes it).
   // Delivery, name and TikTok belong to the whole order, so they stay on myOrder.
-  function emptyBottle(){ return { tumbler: null, sticker: null, pattern: null, addons: [], customName: '', extraOn: false, extraStickers: [], promo: { on: false, sticker: null, pattern: null } }; }
+  function emptyBottle(){ return { tumbler: null, colour: null, sticker: null, pattern: null, addons: [], customName: '', extraOn: false, extraStickers: [], promo: { on: false, sticker: null, pattern: null } }; }
   function snapBottle(){
-    return { tumbler: myOrder.tumbler, sticker: myOrder.sticker, pattern: myOrder.pattern, addons: [...myOrder.addons], customName: myOrder.customName,
+    return { tumbler: myOrder.tumbler, colour: myOrder.colour || null, sticker: myOrder.sticker, pattern: myOrder.pattern, addons: [...myOrder.addons], customName: myOrder.customName,
              extraOn: myOrder.extraOn, extraStickers: [...myOrder.extraStickers], promo: { ...myOrder.promo } };
   }
   function loadBottle(b){
-    Object.assign(myOrder, { tumbler: b.tumbler, sticker: b.sticker, pattern: b.pattern, addons: [...b.addons], customName: b.customName || '',
+    Object.assign(myOrder, { tumbler: b.tumbler, colour: b.colour || null, sticker: b.sticker, pattern: b.pattern, addons: [...b.addons], customName: b.customName || '',
                              extraOn: !!b.extraOn, extraStickers: [...b.extraStickers], promo: { ...b.promo } });
   }
   // Run fn as if bottle b were the one being chosen (so the usual price/text helpers work on it).
@@ -1354,6 +1377,7 @@
   }
   function addonsTextForOrder(){
     const parts = myOrder.addons.map(a => `${a.name} (${a.price_label})`);
+    if (myOrder.colour) parts.unshift(`Colour: ${myOrder.colour.replace(/[,，]/g, ' ')}`); // admin shows it next to the tumbler
     if (hasCustomNameAddon() && cleanCustomName()) parts.push(`Name on tumbler: ${cleanCustomName()}`);
     // Saved as its own segment so admin can show it as a sticker and deduct its stock on Mark Paid.
     myOrder.extraStickers.forEach(x => parts.push(`Extra sticker: ${stickerLabel(x)} (+RM${EXTRA_STICKER_PRICE})`));
@@ -1381,17 +1405,31 @@
         <span class="oprice">${o.detail ? o.detail + ' · ' : ''}RM${o.price}</span>
         ${promo ? `<span class="promo-tag">🎁 Promo: +RM${promoSettings.price} bottle</span>` : ''}
       </div>
+      ${myOrder.tumbler && myOrder.tumbler.id === o.id && tumblerColours(o).length ? `
+      <div class="tumbler-colours" id="tumblerColours">
+        <div class="tc-lbl ${colourWarn && !myOrder.colour ? 'missing' : ''}">🎨 Choose a colour for ${escTc(o.label)}</div>
+        ${tumblerColours(o).map(c => `<button type="button" class="tc-sw ${myOrder.colour === c.name ? 'on' : ''} ${c.status === 'sold_out' ? 'sold' : ''}" data-colour="${escTc(c.name)}"><i style="background:${escTc(c.hex)}"></i>${escTc(c.name)}${c.status === 'sold_out' ? ' · sold out' : (myOrder.colour === c.name ? ' ✓' : '')}</button>`).join('')}
+      </div>` : ''}
     `;
     }).join('');
     el.querySelectorAll('.option-card').forEach(card => {
       card.addEventListener('click', () => {
         const o = TUMBLER_OPTIONS.find(x => x.id === card.dataset.id);
         if (!o || o.status === 'sold_out') return; // sold-out styles can't be picked
-        myOrder.tumbler = (myOrder.tumbler && myOrder.tumbler.id === o.id) ? null : o;
+        const same = myOrder.tumbler && myOrder.tumbler.id === o.id;
+        myOrder.tumbler = same ? null : o;
+        myOrder.colour = null; // a new style needs its own colour
         renderTumblerOptions();
         updateOrderSummary();
       });
     });
+    el.querySelectorAll('.tc-sw').forEach(b => b.addEventListener('click', () => {
+      const c = tumblerColours(myOrder.tumbler).find(x => x.name === b.dataset.colour);
+      if (!c || c.status === 'sold_out') return;
+      myOrder.colour = myOrder.colour === c.name ? null : c.name;
+      renderTumblerOptions();
+      updateOrderSummary();
+    }));
   }
 
   function renderPatternOptions(){
@@ -1424,6 +1462,7 @@
   function bottleMessageLines(){
     const lines = [];
     lines.push(`Tumbler: ${myOrder.tumbler ? tumblerText(myOrder.tumbler) : '(please tell me which one — see photo above)'}`);
+    if (myOrder.colour) lines.push(`Colour: ${myOrder.colour}`);
     lines.push(`Sticker: ${myOrder.sticker ? (myOrder.sticker.code || myOrder.sticker.name) : '(please tell me the code)'}`);
     if (myOrder.sticker) lines.push(`📷 ${stickerPhotoLink(myOrder.sticker)}`);
     myOrder.extraStickers.forEach(x => {
@@ -1478,7 +1517,9 @@
       el.textContent = text;
       el.className = 'val' + (cls ? ' ' + cls : '');
     };
-    set('pickTumbler', myOrder.tumbler ? tumblerText(myOrder.tumbler) : 'Not picked yet', myOrder.tumbler ? '' : 'missing');
+    // A colour that's gone (removed / sold out in admin) is dropped.
+    if (myOrder.colour && !tumblerColours(myOrder.tumbler).some(c => c.name === myOrder.colour && c.status !== 'sold_out')) myOrder.colour = null;
+    set('pickTumbler', myOrder.tumbler ? tumblerText(myOrder.tumbler) + (myOrder.colour ? ` · ${myOrder.colour}` : (tumblerNeedsColour(myOrder.tumbler) ? ' · choose a colour' : '')) : 'Not picked yet', myOrder.tumbler && (myOrder.colour || !tumblerNeedsColour(myOrder.tumbler)) ? '' : 'missing');
     const extraTxt = myOrder.extraStickers.map(x => `${stickerLabel(x)} (+RM${EXTRA_STICKER_PRICE})`).join(', ');
     if (myOrder.sticker) set('pickSticker', extraTxt ? `${stickerLabel(myOrder.sticker)} (free), ${extraTxt}` : stickerLabel(myOrder.sticker), '');
     else set('pickSticker', extraTxt ? `Not picked yet · extra: ${extraTxt}` : 'Not picked yet', 'missing');
@@ -1554,6 +1595,7 @@
   function bottleMissingBits(){
     const missing = [];
     if (!myOrder.tumbler) missing.push('a tumbler (step ①)');
+    else if (tumblerNeedsColour(myOrder.tumbler) && !myOrder.colour) missing.push('a colour for your tumbler (step ①)');
     if (!myOrder.sticker && !stickersUnavailable) missing.push('a sticker (step ②)');
     if (hasCustomNameAddon() && !cleanCustomName()) missing.push('the name for your Custom Name add-on (step ④)');
     if (myOrder.extraOn && !myOrder.extraStickers.length && !stickersUnavailable) missing.push('which extra sticker you want (step ④)');
@@ -1566,7 +1608,7 @@
       const sub = currentBottleSubtotal();
       const stickers = [myOrder.sticker ? stickerLabel(myOrder.sticker) : '—', ...myOrder.extraStickers.map(x => stickerLabel(x) + ' (+RM' + EXTRA_STICKER_PRICE + ')')].join(', ');
       const rows = [
-        ['Tumbler', myOrder.tumbler ? tumblerText(myOrder.tumbler) : 'Not picked yet'],
+        ['Tumbler', myOrder.tumbler ? tumblerText(myOrder.tumbler) + (myOrder.colour ? ` · ${myOrder.colour}` : '') : 'Not picked yet'],
         ['Sticker', stickers],
         ['Pattern', myOrder.pattern ? patternText(myOrder.pattern) : 'Decide on live date'],
       ];
@@ -1955,6 +1997,7 @@
       status: ['available', 'preorder', 'sold_out'].includes(t.status) ? t.status : 'available',
       ...(t.glitter_price !== undefined && t.glitter_price !== null && t.glitter_price !== '' && Number.isFinite(Number(t.glitter_price)) ? { glitter_price: Number(t.glitter_price) } : {}),
       ...(t.no_glitter === true ? { no_glitter: true } : {}),
+      ...(Array.isArray(t.colours) ? { colours: t.colours } : {}),
     }));
     if (!clean.length) return;
     TUMBLER_OPTIONS = clean;
@@ -2216,6 +2259,7 @@
       if (missing.length) {
         e.preventDefault(); // don't open WhatsApp until the order is complete
         sendAttempted = true;
+        if (myOrder.tumbler && !myOrder.colour && tumblerNeedsColour(myOrder.tumbler)) { colourWarn = true; renderTumblerOptions(); }
         refreshSendState();
         document.getElementById('sendWarning').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
@@ -2880,12 +2924,12 @@
   function beforeUpdateReload(){
     try {
       const val = id => ((document.getElementById(id) || {}).value || '');
-      const enc = b => ({ tumbler: b.tumbler && b.tumbler.id, sticker: b.sticker && b.sticker.id, pattern: b.pattern && b.pattern.id,
+      const enc = b => ({ tumbler: b.tumbler && b.tumbler.id, colour: b.colour || null, sticker: b.sticker && b.sticker.id, pattern: b.pattern && b.pattern.id,
         addons: b.addons.map(a => a.id), customName: b.customName, extraOn: b.extraOn, extra: b.extraStickers.map(x => x.id),
         promoOn: b.promo.on, promoSticker: b.promo.sticker && b.promo.sticker.id, promoPattern: b.promo.pattern && b.promo.pattern.id });
       sessionStorage.setItem('sbe_restore', JSON.stringify({
         t: Date.now(), y: window.scrollY, bottles: allBottles().map(enc), cur,
-        tumbler: myOrder.tumbler && myOrder.tumbler.id, sticker: myOrder.sticker && myOrder.sticker.id,
+        tumbler: myOrder.tumbler && myOrder.tumbler.id, colour: myOrder.colour || null, sticker: myOrder.sticker && myOrder.sticker.id,
         pattern: myOrder.pattern && myOrder.pattern.id, delivery: myOrder.delivery,
         addons: myOrder.addons.map(a => a.id), customName: myOrder.customName,
         extraOn: myOrder.extraOn, extra: myOrder.extraStickers.map(x => x.id),
@@ -2903,6 +2947,7 @@
     const st = id => (id && allStickers.find(x => x.id === id)) || null;
     const t = TUMBLER_OPTIONS.find(x => x.id === saved.tumbler && x.status !== 'sold_out');
     myOrder.tumbler = t || null;
+    myOrder.colour = saved.colour || null;
     myOrder.sticker = st(saved.sticker);
     myOrder.pattern = PATTERN_OPTIONS.find(x => x.id === saved.pattern) || null;
     myOrder.delivery = DELIVERY_OPTIONS[saved.delivery] ? saved.delivery : null;
@@ -2915,7 +2960,7 @@
     myOrder.promo = { on: !!saved.promoOn, sticker: st(saved.promoSticker), pattern: PATTERN_OPTIONS.find(x => x.id === saved.promoPattern) || null };
     if (Array.isArray(saved.bottles) && saved.bottles.length > 1) {
       const dec = e => ({
-        tumbler: TUMBLER_OPTIONS.find(x => x.id === e.tumbler && x.status !== 'sold_out') || null, sticker: st(e.sticker),
+        tumbler: TUMBLER_OPTIONS.find(x => x.id === e.tumbler && x.status !== 'sold_out') || null, colour: e.colour || null, sticker: st(e.sticker),
         pattern: PATTERN_OPTIONS.find(x => x.id === e.pattern) || null, addons: loadedAddons.filter(a => (e.addons || []).includes(a.id)),
         customName: e.customName || '', extraOn: !!e.extraOn, extraStickers: (e.extra || []).map(st).filter(Boolean),
         promo: { on: !!e.promoOn, sticker: st(e.promoSticker), pattern: PATTERN_OPTIONS.find(x => x.id === e.promoPattern) || null },
