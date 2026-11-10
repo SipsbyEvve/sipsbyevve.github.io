@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-09-1">
+<meta name="sbe-build" content="2026-11-10-1">
 <title>Sips by Evve — Custom Snowglobe Tumblers Catalogue</title>
 <meta property="og:title" content="Sips by Evve — Custom Snowglobe Tumblers Catalogue">
 <meta property="og:description" content="Pick your tumbler, sticker &amp; pattern, then send your order on WhatsApp 🎀 Free shipping West Malaysia.">
@@ -338,6 +338,15 @@
     box-shadow:var(--shadow); margin-top:18px;
   }
   .order-summary h3{ margin:0 0 10px; font-size:1rem; }
+  .sum-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin:0 0 10px; }
+  .sum-head h3{ margin:0; }
+  .clear-order-btn{ border:1.5px solid #f1c9bd; background:#fff; color:#b0452f; border-radius:999px; padding:5px 11px; font-weight:800; font-size:0.76rem; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .clear-ask{ background:#fff4f2; border:1.5px solid #f1c9bd; border-radius:12px; padding:10px 12px; margin:0 0 10px; font-size:0.84rem; }
+  .clear-ask .btns{ display:flex; gap:8px; margin-top:8px; }
+  .clear-ask button{ border-radius:10px; padding:7px 12px; font-weight:800; font-size:0.82rem; font-family:inherit; cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--ink); }
+  .clear-ask button.yes{ background:#d9534f; border-color:#d9534f; color:#fff; }
+  .cta-row .btn-whatsapp.waiting{ background:#9fd9b5; box-shadow:none; }
+  .page-toast{ position:fixed; left:50%; bottom:90px; transform:translateX(-50%); z-index:60; background:#3a2e22; color:#fff; border-radius:12px; padding:10px 14px; font-size:0.86rem; font-weight:600; box-shadow:0 8px 22px rgba(0,0,0,0.25); max-width:calc(100% - 32px); text-align:center; }
   .order-summary .pick-row{
     display:flex; justify-content:space-between; gap:10px; font-size:0.85rem; padding:6px 0; border-bottom:1px dashed var(--line);
   }
@@ -883,7 +892,11 @@
     <p class="zoom-caption">🔍 Tap image to enlarge</p>
 
     <div class="order-summary" id="orderSummary">
-      <h3 id="orderSummaryTitle">📝 My order</h3>
+      <div class="sum-head"><h3 id="orderSummaryTitle">📝 My order</h3><button type="button" class="clear-order-btn" id="clearOrderBtn" style="display:none;">🗑 Clear</button></div>
+      <div class="clear-ask" id="clearAsk" style="display:none;">
+        <b>Clear everything you picked?</b><br>Your tumblers, stickers, patterns, add-ons and delivery will be removed. Your name and TikTok stay.
+        <div class="btns"><button type="button" class="yes" id="clearYesBtn">Yes, clear</button><button type="button" id="clearNoBtn">Cancel</button></div>
+      </div>
       <div class="order-no-line" id="orderNoLine" style="display:none;"><span>Order no · 订单号</span><b id="orderNoText"></b></div>
       <div id="bottlesBefore"></div>
       <div id="curBottle">
@@ -931,7 +944,7 @@
     <div class="cta-row">
       <a class="btn btn-whatsapp" id="whatsappOrderBtn" href="https://wa.me/evvyne" target="_blank" rel="noopener">
         <svg viewBox="0 0 32 32" fill="currentColor"><path d="M16.001 3C9.383 3 4 8.383 4 15.001c0 2.386.7 4.611 1.902 6.483L4 29l7.723-1.867A11.94 11.94 0 0 0 16.001 27C22.619 27 28 21.617 28 15.001 28 8.383 22.619 3 16.001 3zm0 21.818c-1.94 0-3.751-.55-5.286-1.503l-.379-.226-4.583 1.108 1.128-4.463-.247-.396A9.77 9.77 0 0 1 5.182 15c0-5.965 4.854-10.818 10.819-10.818S26.818 9.035 26.818 15 21.965 24.818 16.001 24.818z"/></svg>
-        Send to WhatsApp
+        <span id="waBtnLabel">Send to WhatsApp</span>
       </a>
     </div>
     <p class="note" style="margin-top:10px;">This opens WhatsApp with your order already filled in — just press send! 💛</p>
@@ -1625,6 +1638,8 @@
     const multi = isMulti();
     const list = allBottles();
     document.getElementById('orderSummary').classList.toggle('multi', multi);
+    const clr = document.getElementById('clearOrderBtn');
+    if (clr) { const has = orderHasPicks(); clr.style.display = has ? '' : 'none'; if (!has) document.getElementById('clearAsk').style.display = 'none'; }
     const realCount = orderBottles().length;
     document.getElementById('orderSummaryTitle').textContent = realCount > 1 ? `📝 My order (${realCount} tumblers)` : '📝 My order';
     document.getElementById('bottlesBefore').innerHTML = list.slice(0, cur).map((b, i) => bottleCardHtml(b, i)).join('');
@@ -1745,6 +1760,33 @@
     showCurrentBottleInPickers();
   }
   document.getElementById('addBottleBtn').addEventListener('click', addBottle);
+
+  // ---- 🗑 Clear the whole order (asks first). Name and TikTok stay. ----
+  function orderHasPicks(){ return allBottles().some(b => !bottleIsEmpty(b)) || !!myOrder.delivery; }
+  function pageToast(text){
+    const t = document.createElement('div'); t.className = 'page-toast'; t.textContent = text;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 3200);
+  }
+  document.getElementById('clearOrderBtn').addEventListener('click', () => {
+    document.getElementById('clearAsk').style.display = '';
+    document.getElementById('clearOrderBtn').style.opacity = '0.4';
+  });
+  document.getElementById('clearNoBtn').addEventListener('click', () => {
+    document.getElementById('clearAsk').style.display = 'none';
+    document.getElementById('clearOrderBtn').style.opacity = '';
+  });
+  document.getElementById('clearYesBtn').addEventListener('click', () => {
+    bottles = [emptyBottle()]; cur = 0;
+    loadBottle(bottles[0]);
+    myOrder.delivery = null;
+    sendAttempted = false; colourWarn = false; lastRemovedBottle = null;
+    if (orderNoSent) { keepOrderNo(null, false); orderNoFailed = false; } // a new order gets a new number
+    ['addBottleNote', 'clearAsk', 'sendBackup', 'orderNoBig', 'glitterRemovedNote'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    document.getElementById('clearOrderBtn').style.opacity = '';
+    showCurrentBottleInPickers();
+    scrollToStep1();
+    pageToast('🧹 Your order is cleared — pick again from step ①');
+  });
   document.getElementById('bottleBannerBtn').addEventListener('click', () => {
     document.getElementById('orderSummary').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
@@ -2136,9 +2178,9 @@
   // so two customers never get the same one. It's asked for once the order is filled in (so it's
   // ready the moment they tap Send) and kept for this visit, so sending again (or fixing the order)
   // keeps the same number. If Supabase can't be reached, a stand-in like 1102Z7Q is used.
-  let orderNo = null, orderNoBusy = false;
-  try { const v = JSON.parse(sessionStorage.getItem('sbe_order_no') || 'null'); if (v && v.no && Date.now() - v.t < 12 * 3600e3) orderNo = v.no; } catch (e) {}
-  function keepOrderNo(no){ orderNo = no; try { sessionStorage.setItem('sbe_order_no', JSON.stringify({ no, t: Date.now() })); } catch (e) {} }
+  let orderNo = null, orderNoBusy = false, orderNoFailed = false, orderNoSent = false;
+  try { const v = JSON.parse(sessionStorage.getItem('sbe_order_no') || 'null'); if (v && v.no && Date.now() - v.t < 12 * 3600e3) { orderNo = v.no; orderNoSent = !!v.sent; } } catch (e) {}
+  function keepOrderNo(no, sent){ orderNo = no; if (sent !== undefined) orderNoSent = sent; try { if (no) sessionStorage.setItem('sbe_order_no', JSON.stringify({ no, t: Date.now(), sent: orderNoSent })); else sessionStorage.removeItem('sbe_order_no'); } catch (e) {} }
   function myDateCode(){
     const d = new Date(Date.now() + 8 * 3600e3); // Malaysia time
     return String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
@@ -2148,16 +2190,25 @@
     let r = ''; for (let i = 0; i < 3; i++) r += A[Math.floor(Math.random() * A.length)];
     return myDateCode() + 'Z' + r;
   }
+  // The Send button waits for the real number (usually well under a second). Only if Supabase
+  // fails, or takes more than 4 seconds, is a stand-in (with a Z) used.
   async function reserveOrderNo(){
-    if (orderNo || orderNoBusy || !client || typeof client.rpc !== 'function') return;
+    if (orderNo || orderNoBusy || orderNoFailed) return;
+    if (!client || typeof client.rpc !== 'function') { orderNoFailed = true; refreshSendState(); return; }
     orderNoBusy = true;
+    refreshSendState();
+    const timer = setTimeout(() => { if (!orderNo) { orderNoFailed = true; refreshSendState(); } }, 4000);
     try {
       const { data, error } = await client.rpc('next_order_no');
-      if (!error && typeof data === 'string' && /^[0-9A-Z]{5,12}$/.test(data)) { keepOrderNo(data); updateOrderSummary(); }
-      else if (error) console.warn('order number:', error.message || error);
-    } catch (e) { console.warn('order number:', e && e.message); }
+      if (!error && typeof data === 'string' && /^[0-9A-Z]{5,12}$/.test(data)) {
+        if (!orderNo) keepOrderNo(data, false); // (if a stand-in was already sent, keep that one)
+      } else { orderNoFailed = true; if (error) console.warn('order number:', error.message || error); }
+    } catch (e) { orderNoFailed = true; console.warn('order number:', e && e.message); }
+    clearTimeout(timer);
     orderNoBusy = false;
+    updateOrderSummary();
   }
+  const waitingForOrderNo = () => !orderNo && !orderNoFailed;
   function showOrderNo(){
     const line = document.getElementById('orderNoLine');
     if (line) { line.style.display = orderNo ? '' : 'none'; document.getElementById('orderNoText').textContent = orderNo || ''; }
@@ -2169,6 +2220,12 @@
     showOrderNo();
     const btn = document.getElementById('whatsappOrderBtn');
     if (btn) {
+      const waiting = !missing.length && waitingForOrderNo();
+      btn.classList.toggle('waiting', waiting);
+      const lbl = document.getElementById('waBtnLabel');
+      if (lbl) lbl.textContent = waiting ? '⏳ One sec — getting your order number…' : 'Send to WhatsApp';
+      const line = document.getElementById('orderNoLine');
+      if (line && waiting) { line.style.display = ''; document.getElementById('orderNoText').textContent = 'getting it…'; }
       btn.classList.toggle('incomplete', missing.length > 0); // greyed look only — still tappable, to show what's missing
     }
     const warn = document.getElementById('sendWarning');
@@ -2264,7 +2321,9 @@
         document.getElementById('sendWarning').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
+      if (waitingForOrderNo()) { e.preventDefault(); reserveOrderNo(); refreshSendState(); return; } // number is on its way — tap again in a moment
       if (!orderNo) { keepOrderNo(standInOrderNo()); showOrderNo(); }
+      keepOrderNo(orderNo, true); // sent: a cleared order starts with a new number
       whatsappOrderBtn.href = `https://wa.me/evvyne?text=${encodeURIComponent(buildWhatsAppMessage())}`; // make sure the number is in it
       logOrder();
       showSendBackup();
