@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-10-1">
+<meta name="sbe-build" content="2026-11-15-1">
 <title>Sips by Evve — Custom Snowglobe Tumblers Catalogue</title>
 <meta property="og:title" content="Sips by Evve — Custom Snowglobe Tumblers Catalogue">
 <meta property="og:description" content="Pick your tumbler, sticker &amp; pattern, then send your order on WhatsApp 🎀 Free shipping West Malaysia.">
@@ -1498,13 +1498,19 @@
     }
     return lines;
   }
+  // Order date in Malaysia time, worked out when the message is built (the Send tap rebuilds it).
+  function orderDateText(){
+    try { return new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Kuala_Lumpur', day: 'numeric', month: 'short', year: 'numeric' }).replace(/Sept/, 'Sep'); }
+    catch (e) { const d = new Date(Date.now() + 8 * 3600000); return `${d.getUTCDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+  }
   function buildWhatsAppMessage(){
     const list = orderBottles();
+    const head = [...(orderNo ? [`Order no: ${orderNo}`] : []), `Date: ${orderDateText()}`];
     let lines;
     if (list.length === 1) {
-      lines = ["Hi! I'd like to order 🐳", ...(orderNo ? [`Order no: ${orderNo}`] : []), '', ...withBottle(list[0], bottleMessageLines)];
+      lines = ["Hi! I'd like to order 🐳", ...head, '', ...withBottle(list[0], bottleMessageLines)];
     } else {
-      lines = [`Hi! I'd like to order 🐳 (${list.length} tumblers)`, ...(orderNo ? [`Order no: ${orderNo}`] : [])];
+      lines = [`Hi! I'd like to order 🐳 (${list.length} tumblers)`, ...head];
       list.forEach((b, i) => {
         const part = withBottle(b, bottleMessageLines);
         while (part.length && part[part.length - 1] === '') part.pop();
