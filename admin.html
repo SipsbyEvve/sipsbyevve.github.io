@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-15-1">
+<meta name="sbe-build" content="2026-11-17-1">
 <link rel="manifest" href="admin.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="admin-icon-192.png">
 <link rel="apple-touch-icon" href="admin-icon-180.png">
@@ -434,6 +434,30 @@
   .kw-row .kw-old{ color:var(--muted); }
   .kw-row .kw-new{ color:#1e5c3a; font-weight:600; }
   .kw-row input{ width:auto; margin:4px 0 0; flex:none; }
+  /* Tidy read-only view of an order (the editable boxes only show after Edit) */
+  .o-top .o-date{ order:3; }
+  .o-state{ margin-left:auto; border-radius:999px; padding:2px 10px; font-size:0.72rem; font-weight:800; letter-spacing:0.3px; }
+  .o-state.paid{ background:#e3f6e6; color:#2e7d3a; }
+  .o-state.unpaid{ background:#fdecea; color:#b2463c; }
+  .o-state.editing{ background:#fff3d6; color:#9a6a00; }
+  .o-view{ flex:1 1 100%; }
+  .ov-who{ margin:2px 0 8px; font-size:0.95rem; }
+  .ov-who b{ font-size:1rem; }
+  .ov-who span{ color:var(--muted); }
+  .ov-grid{ display:grid; grid-template-columns:auto 1fr; gap:6px 12px; align-items:center; background:#fdf8f2; border-radius:12px; padding:10px 12px; font-size:0.9rem; }
+  .ov-k{ color:var(--muted); font-size:0.8rem; white-space:nowrap; }
+  .ov-v{ font-weight:600; min-width:0; overflow-wrap:anywhere; }
+  .ov-v.none{ color:var(--muted); font-weight:400; }
+  .ov-st{ display:flex; align-items:center; gap:8px; }
+  .ov-st img, .ov-st .ov-noimg{ width:40px; height:40px; border-radius:8px; object-fit:cover; flex:none; background:var(--bg); }
+  .ov-st small, .ov-sub{ display:block; font-weight:400; color:var(--muted); font-size:0.75rem; }
+  .ov-chip{ display:inline-flex; align-items:center; gap:5px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:2px 9px; font-size:0.8rem; margin:2px 4px 2px 0; font-weight:600; }
+  .ov-chip img{ width:20px; height:20px; border-radius:5px; object-fit:cover; }
+  .o-form{ flex:1 1 100%; display:flex; flex-wrap:wrap; gap:6px; align-items:stretch; }
+  .order-row:not(.editing) .o-form{ display:none; }
+  .order-row.editing .o-view{ display:none; }
+  .o-foot{ flex:1 1 100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .o-foot .o-total{ flex:1 1 auto; font-size:1rem; }
   .o-group{ flex:1 1 100%; font-size:0.8rem; font-weight:700; color:#6a3fb0; background:#f1eafb; border-radius:8px; padding:4px 8px; }
   .addon-check-label{ display:inline-flex; align-items:center; gap:4px; font-size:0.82rem; color:var(--ink); }
   .addon-legacy-note{ font-size:0.78rem; color:var(--muted); font-style:italic; }
@@ -4359,6 +4383,59 @@
     return warnings.length ? warnings.join(' ') : null;
   }
 
+  // ---- Tidy read-only view of one order ----
+  function orderStickerView(code, cls){
+    const st = allStickersAdmin.find(x => x.code === code);
+    const img = st ? `<img ${thumbOrFull(st.image_path)} alt="" loading="lazy" onerror="handleImgError(this)">` : '<span class="ov-noimg"></span>';
+    return `<span class="ov-st ${cls || ''}">${img}<span>${escAttr(code)}${st ? `<small>${escAttr(placeLabel({ category: st.category, subcategory: st.subcategory || null }))}</small>` : '<small>not found</small>'}</span></span>`;
+  }
+  function orderChipSticker(code, label){
+    const st = allStickersAdmin.find(x => x.code === code);
+    return `<span class="ov-chip">${st ? `<img ${thumbOrFull(st.image_path)} alt="" loading="lazy" onerror="handleImgError(this)">` : ''}${escAttr(label)}</span>`;
+  }
+  function orderViewHtml(o){
+    const parts = String(o.addons || '').split(',').map(x => x.trim()).filter(Boolean);
+    const { customName, extraStickers, promoInfo, promoSticker, rest } = splitCustomName(parts);
+    const colour = orderColour(o.addons);
+    const line = (k, v) => `<span class="ov-k">${k}</span>${v}`;
+    const val = (t) => t ? `<span class="ov-v">${escAttr(t)}</span>` : '<span class="ov-v none">—</span>';
+    const chips = [];
+    rest.filter(p => !MULTI_RE.test(p) && !COLOUR_RE.test(p)).forEach(p => chips.push(`<span class="ov-chip">${escAttr(p.replace(/\s*\((\+?RM[^)]*)\)\s*$/i, ' $1'))}</span>`));
+    if (customName) chips.push(`<span class="ov-chip">✏️ Name: ${escAttr(customName)}</span>`);
+    extraStickers.filter(x => x.code).forEach(x => chips.push(orderChipSticker(x.code, `Extra sticker ${x.code} +RM${x.price}`)));
+    const g = orderGroup(o);
+    const delivery = o.delivery ? val(o.delivery) : (g && g.n > 1 ? '<span class="ov-v none">on Bottle 1</span>' : val(''));
+    const tiktok = (o.tiktok_handle || '').trim();
+    const rows = [
+      line('🥤 Tumbler', val(o.tumbler)),
+      colour ? line('🎨 Colour', val(colour)) : '',
+      line('🖼 Sticker', o.sticker_code ? `<span class="ov-v">${orderStickerView(o.sticker_code)}</span>` : val('')),
+      line('✨ Pattern', val(o.pattern)),
+      chips.length ? line('➕ Add-ons', `<span class="ov-v">${chips.join('')}</span>`) : '',
+      promoInfo.length || promoSticker ? line('🎁 Promo', `<span class="ov-v">${promoInfo.map(p => `<span class="ov-chip">${escAttr(p.replace(/^promo (bottle|pattern):\s*/i, ''))}</span>`).join('')}${promoSticker ? orderChipSticker(promoSticker, promoSticker) : ''}</span>`) : '',
+      ('delivery' in o) ? line('🚚 Delivery', delivery) : '',
+    ].join('');
+    return `<div class="ov-who"><b>${escAttr(o.customer_name || '—')}</b>${tiktok ? ` <span>· ${escAttr(tiktok.startsWith('@') ? tiktok : '@' + tiktok)}</span>` : ''}</div><div class="ov-grid">${rows}</div>`;
+  }
+  // The editable boxes (shown only after Edit; rebuilt on Cancel).
+  function orderFormHtml(o){
+    return `
+        <input type="text" class="o-name" value="${escAttr(o.customer_name || '')}" placeholder="Name" disabled style="flex:1;min-width:90px;">
+        <input type="text" class="o-tiktok" value="${escAttr(o.tiktok_handle || '')}" placeholder="TikTok" disabled style="flex:1;min-width:90px;">
+        <select class="o-tumbler" disabled style="flex:1;min-width:130px;">${tumblerOptionsHtml(o.tumbler)}</select>
+        <select class="o-colour" disabled>${colourOptionsHtml(o.tumbler, orderColour(o.addons))}</select>
+        <select class="o-sticker" disabled style="min-width:130px;">${stickerOptionsHtml(o.sticker_code)}</select>
+        <select class="o-pattern" disabled style="flex:1;min-width:130px;">${patternOptionsHtml(o.pattern)}</select>
+        ${'delivery' in o ? `<select class="o-delivery" disabled style="flex:1;min-width:150px;">${deliveryOptionsHtml(o.delivery)}</select>` : ''}
+        <div class="o-addons-group" style="flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">${addonsCheckboxesHtml(o.addons)}</div>`;
+  }
+  function setOrderStateLook(row, status, editing){
+    const el = row && row.querySelector('.o-state');
+    if (!el) return;
+    el.className = 'o-state ' + (editing ? 'editing' : status === 'paid' ? 'paid' : 'unpaid');
+    el.textContent = editing ? 'EDITING' : status === 'paid' ? '✓ PAID' : 'UNPAID';
+  }
+
   let orderNoDupes = new Set();
   async function renderOrders(){
     const el = document.getElementById('ordersList');
@@ -4388,22 +4465,19 @@
       const isPaid = o.status === 'paid';
       return `
       <div class="addon-row order-row ${isArchivedOrder(o) ? 'is-archived' : ''}" data-id="${o.id}" style="flex-wrap:wrap;gap:6px;align-items:stretch;">
-        <div class="o-top">${o.order_no ? `<span class="o-no ${orderNoDupes.has(o.order_no) ? 'dupe' : ''}" title="${orderNoDupes.has(o.order_no) ? 'Two different orders have this number — check them' : 'Order number — customers write this when they pay'}">${escAttr(o.order_no)}</span>` : ''}<span class="o-date">📅 ${fmtOrderDate(o.created_at)}</span>${isArchivedOrder(o) ? '<span class="o-read">📥 read</span>' : ''}</div>
+        <div class="o-top">${o.order_no ? `<span class="o-no ${orderNoDupes.has(o.order_no) ? 'dupe' : ''}" title="${orderNoDupes.has(o.order_no) ? 'Two different orders have this number — check them' : 'Order number — customers write this when they pay'}">${escAttr(o.order_no)}</span>` : ''}<span class="o-date">📅 ${fmtOrderDate(o.created_at)}</span>${isArchivedOrder(o) ? '<span class="o-read">📥 read</span>' : ''}<span class="o-state ${isPaid ? 'paid' : 'unpaid'}">${isPaid ? '✓ PAID' : 'UNPAID'}</span></div>
         ${orderGroupBadge(o)}
-        <input type="text" class="o-name" value="${o.customer_name || ''}" placeholder="Name" disabled style="flex:1;min-width:90px;">
-        <input type="text" class="o-tiktok" value="${o.tiktok_handle || ''}" placeholder="TikTok" disabled style="flex:1;min-width:90px;">
-        <select class="o-tumbler" disabled style="flex:1;min-width:130px;">${tumblerOptionsHtml(o.tumbler)}</select>
-        <select class="o-colour" disabled>${colourOptionsHtml(o.tumbler, orderColour(o.addons))}</select>
-        <select class="o-sticker" disabled style="min-width:130px;">${stickerOptionsHtml(o.sticker_code)}</select>
-        <select class="o-pattern" disabled style="flex:1;min-width:130px;">${patternOptionsHtml(o.pattern)}</select>
-        ${'delivery' in o ? `<select class="o-delivery" disabled style="flex:1;min-width:150px;">${deliveryOptionsHtml(o.delivery)}</select>` : ''}
-        <div class="o-addons-group" style="flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">${addonsCheckboxesHtml(o.addons)}</div>
+        <div class="o-view">${orderViewHtml(o)}</div>
+        <div class="o-form">${orderFormHtml(o)}</div>
+        <div class="o-foot">
         <span class="o-total"></span>
         <div class="row-actions">
           <button class="secondary o-edit-btn">Edit</button>
           <button class="secondary o-save-btn" style="display:none;">Save</button>
+          <button type="button" class="secondary o-cancel-btn" style="display:none;">Cancel</button>
           <button type="button" class="secondary o-paid-btn ${isPaid ? 'is-paid' : ''}">${isPaid ? '✓ Paid' : 'Mark Paid'}</button>
           <button class="danger o-delete-btn">✕</button>
+        </div>
         </div>
       </div>
     `;
@@ -4415,6 +4489,10 @@
       const fieldInputs = () => row.querySelectorAll('.o-name, .o-tiktok, .o-tumbler, .o-colour, .o-sticker, .o-pattern, .o-delivery, .o-addon-check, .o-custom-name, .o-extra-sticker, .o-promo-sticker, .sp-btn');
       const paidBtnEl = row.querySelector('.o-paid-btn');
       const setEditing = (on) => {
+        row.classList.toggle('editing', on);
+        setOrderStateLook(row, order.status, on);
+        row.querySelector('.o-cancel-btn').style.display = on ? '' : 'none';
+        row.querySelector('.o-delete-btn').style.display = on ? 'none' : '';
         paidBtnEl.disabled = on;
         paidBtnEl.title = on ? 'Save your changes first' : '';
         let note = row.querySelector('.o-paid-note');
@@ -4422,13 +4500,13 @@
         if (!on && note) note.remove();
       };
       enhanceStickerSelects(row);
-      row.querySelector('.o-tumbler').addEventListener('change', (e) => {
-        const sel = row.querySelector('.o-colour');
-        const keep = coloursOfTumblerText(e.target.value).some(c => c.name === sel.value) ? sel.value : '';
-        sel.innerHTML = colourOptionsHtml(e.target.value, keep);
-      });
       refreshOrderRowTotal(row);
-      row.addEventListener('change', () => {
+      row.addEventListener('change', (e) => {
+        if (e.target.classList && e.target.classList.contains('o-tumbler')) {
+          const sel = row.querySelector('.o-colour');
+          const keep = coloursOfTumblerText(e.target.value).some(c => c.name === sel.value) ? sel.value : '';
+          sel.innerHTML = colourOptionsHtml(e.target.value, keep);
+        }
         row.querySelectorAll('.extra-sticker-label').forEach(l => { l.dataset.empty = l.querySelector('select').value ? '0' : '1'; });
         refreshOrderRowTotal(row);
       });
@@ -4441,6 +4519,17 @@
         saveBtn.style.display = '';
         setEditing(true);
         row.querySelector('.o-name').focus();
+      });
+      // Cancel: throw away the changes and go back to the tidy view.
+      row.querySelector('.o-cancel-btn').addEventListener('click', () => {
+        closeStickerPicker();
+        const form = row.querySelector('.o-form');
+        form.innerHTML = orderFormHtml(order);
+        enhanceStickerSelects(form);
+        refreshOrderRowTotal(row);
+        saveBtn.style.display = 'none';
+        editBtn.style.display = '';
+        setEditing(false);
       });
 
       saveBtn.addEventListener('click', async () => {
@@ -4468,6 +4557,7 @@
         fieldInputs().forEach(inp => { inp.disabled = true; });
         saveBtn.style.display = 'none';
         editBtn.style.display = '';
+        row.querySelector('.o-view').innerHTML = orderViewHtml(order);
         setEditing(false);
         // An order that's already Paid: changing its stickers moves the stock too
         // (the old sticker goes back, the new one is taken off).
@@ -4504,7 +4594,7 @@
             const w = await setOrderPaidStatus(o2, newStatus);
             if (w) warnings.push(w);
             const b2 = document.querySelector(`#ordersList .order-row[data-id="${o2.id}"] .o-paid-btn`);
-            if (b2) { b2.classList.toggle('is-paid', o2.status === 'paid'); b2.textContent = o2.status === 'paid' ? '✓ Paid' : 'Mark Paid'; }
+            if (b2) { b2.classList.toggle('is-paid', o2.status === 'paid'); b2.textContent = o2.status === 'paid' ? '✓ Paid' : 'Mark Paid'; setOrderStateLook(b2.closest('.order-row'), o2.status, false); }
           }
           btn.disabled = false;
           renderSalesStats();
@@ -4547,6 +4637,7 @@
           updateOrdersTabBadge();
           btn.classList.toggle('is-paid', newStatus === 'paid');
           btn.textContent = newStatus === 'paid' ? '✓ Paid' : 'Mark Paid';
+          setOrderStateLook(row, newStatus, false);
           showToast(stockWarning || (newStatus === 'paid' ? '✅ Marked paid!' : '↩️ Un-marked'), !!stockWarning);
         } catch (err) {
           // Belt-and-braces: if anything above throws unexpectedly, don't leave

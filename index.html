@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-15-3">
+<meta name="sbe-build" content="2026-11-17-1">
 <link rel="manifest" href="site.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="site-icon-192.png">
 <link rel="apple-touch-icon" href="site-icon-180.png">
@@ -2192,9 +2192,24 @@
   // so two customers never get the same one. It's asked for once the order is filled in (so it's
   // ready the moment they tap Send) and kept for this visit, so sending again (or fixing the order)
   // keeps the same number. If Supabase can't be reached, a stand-in like 1102Z7Q is used.
-  let orderNo = null, orderNoBusy = false, orderNoFailed = false, orderNoSent = false;
-  try { const v = JSON.parse(sessionStorage.getItem('sbe_order_no') || 'null'); if (v && v.no && Date.now() - v.t < 12 * 3600e3) { orderNo = v.no; orderNoSent = !!v.sent; } } catch (e) {}
-  function keepOrderNo(no, sent){ orderNo = no; if (sent !== undefined) orderNoSent = sent; try { if (no) sessionStorage.setItem('sbe_order_no', JSON.stringify({ no, t: Date.now(), sent: orderNoSent })); else sessionStorage.removeItem('sbe_order_no'); } catch (e) {} }
+  // orderSentSig = what the order looked like when it was sent. If the customer changes anything
+  // after sending, the next Send gets a NEW number (a changed order is a new order). Sending the
+  // exact same order again (WhatsApp didn't open…) keeps the same number.
+  let orderNo = null, orderNoBusy = false, orderNoFailed = false, orderNoSent = false, orderSentSig = null;
+  try { const v = JSON.parse(sessionStorage.getItem('sbe_order_no') || 'null'); if (v && v.no && Date.now() - v.t < 12 * 3600e3) { orderNo = v.no; orderNoSent = !!v.sent; orderSentSig = v.sig || null; } } catch (e) {}
+  function keepOrderNo(no, sent){ orderNo = no; if (sent !== undefined) orderNoSent = sent; if (!no) orderSentSig = null; try { if (no) sessionStorage.setItem('sbe_order_no', JSON.stringify({ no, t: Date.now(), sent: orderNoSent, sig: orderSentSig })); else sessionStorage.removeItem('sbe_order_no'); } catch (e) {} }
+  function currentOrderSig(){
+    try { return buildWhatsAppMessage().split('\n').filter(l => !/^(Order no|Date):/.test(l)).join('\n'); } catch (e) { return null; }
+  }
+  // Called whenever the order changes: a sent order that's been changed gives up its number.
+  function dropSentNumberIfChanged(){
+    if (!orderNoSent || orderSentSig === null) return;
+    try { if (sessionStorage.getItem('sbe_restore')) return; } catch (e) {} // order is being put back after an update — wait
+    const sig = currentOrderSig();
+    if (sig === null || sig === orderSentSig) return;
+    keepOrderNo(null, false); orderNoFailed = false;
+    ['orderNoBig', 'sendBackup'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  }
   function myDateCode(){
     const d = new Date(Date.now() + 8 * 3600e3); // Malaysia time
     return String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
@@ -2229,6 +2244,7 @@
   }
   let sendAttempted = false; // becomes true after the first tap on Send, so the missing list stays visible
   function refreshSendState(){
+    dropSentNumberIfChanged();
     const missing = missingOrderBits();
     if (!missing.length) reserveOrderNo();
     showOrderNo();
@@ -2337,7 +2353,8 @@
       }
       if (waitingForOrderNo()) { e.preventDefault(); reserveOrderNo(); refreshSendState(); return; } // number is on its way — tap again in a moment
       if (!orderNo) { keepOrderNo(standInOrderNo()); showOrderNo(); }
-      keepOrderNo(orderNo, true); // sent: a cleared order starts with a new number
+      orderSentSig = currentOrderSig();
+      keepOrderNo(orderNo, true); // sent: a changed or cleared order starts with a new number
       whatsappOrderBtn.href = `https://wa.me/evvyne?text=${encodeURIComponent(buildWhatsAppMessage())}`; // make sure the number is in it
       logOrder();
       showSendBackup();
