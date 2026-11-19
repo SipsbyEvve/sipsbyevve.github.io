@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-19-1">
+<meta name="sbe-build" content="2026-11-19-2">
 <link rel="manifest" href="site.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="site-icon-192.png">
 <link rel="apple-touch-icon" href="site-icon-180.png">
@@ -581,6 +581,7 @@
   .disc-link{ background:none; border:none; padding:0; margin-top:8px; font:inherit; font-size:0.88rem; font-weight:700; color:var(--brown-dark); text-decoration:underline; cursor:pointer; }
   .disc-form{ display:flex; gap:8px; margin-top:8px; }
   .disc-form input{ flex:1; min-width:0; border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; font:700 1rem ui-monospace,Menlo,monospace; letter-spacing:1px; text-transform:uppercase; background:#fdf8f2; color:var(--ink); }
+  .disc-form input::placeholder{ text-transform:none; letter-spacing:0; font-weight:600; font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif; color:var(--muted); }
   .disc-form button{ border:none; background:var(--brown); color:#fff; border-radius:12px; padding:0 16px; font-weight:700; font-size:0.9rem; font-family:inherit; cursor:pointer; }
   .disc-form button:disabled{ opacity:0.6; }
   .disc-msg{ margin-top:8px; border-radius:12px; padding:9px 12px; font-size:0.85rem; line-height:1.5; }
@@ -954,7 +955,7 @@
       <div class="disc-wrap" id="discWrap">
         <button type="button" class="disc-link" id="discLink">🎟 Have a discount code? · 有折扣码？</button>
         <div class="disc-form" id="discForm" style="display:none;">
-          <input type="text" id="discInput" placeholder="e.g. WONO8KQ3" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="30">
+          <input type="text" id="discInput" placeholder="Your code · 折扣码" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="30">
           <button type="button" id="discApply">Apply</button>
         </div>
         <div class="disc-msg" id="discMsg" style="display:none;"></div>
