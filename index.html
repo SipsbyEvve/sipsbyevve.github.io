@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-17-1">
+<meta name="sbe-build" content="2026-11-19-1">
 <link rel="manifest" href="site.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="site-icon-192.png">
 <link rel="apple-touch-icon" href="site-icon-180.png">
@@ -573,6 +573,21 @@
   }
   .total-row #orderTotal{ color:var(--brown-dark); }
   .total-row #orderTotal.soft{ color:var(--muted); font-size:0.85rem; font-weight:600; }
+  /* 🎟 Discount code (it's the customer's credit, shown to customers as a discount code) */
+  .disc-row, .pay-row{ display:flex; justify-content:space-between; align-items:baseline; font-size:0.95rem; padding-top:4px; }
+  .disc-row{ color:#2e7d3a; font-weight:700; }
+  .pay-row{ margin-top:6px; padding-top:8px; border-top:1px dashed var(--line); font-weight:900; font-size:1.15rem; }
+  .total-row.has-disc{ font-weight:600; font-size:0.95rem; }
+  .disc-link{ background:none; border:none; padding:0; margin-top:8px; font:inherit; font-size:0.88rem; font-weight:700; color:var(--brown-dark); text-decoration:underline; cursor:pointer; }
+  .disc-form{ display:flex; gap:8px; margin-top:8px; }
+  .disc-form input{ flex:1; min-width:0; border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; font:700 1rem ui-monospace,Menlo,monospace; letter-spacing:1px; text-transform:uppercase; background:#fdf8f2; color:var(--ink); }
+  .disc-form button{ border:none; background:var(--brown); color:#fff; border-radius:12px; padding:0 16px; font-weight:700; font-size:0.9rem; font-family:inherit; cursor:pointer; }
+  .disc-form button:disabled{ opacity:0.6; }
+  .disc-msg{ margin-top:8px; border-radius:12px; padding:9px 12px; font-size:0.85rem; line-height:1.5; }
+  .disc-msg.ok{ background:#e9f6ea; border:1px solid #bfe3c3; color:#2e6b36; display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .disc-msg.ok b{ font-family:ui-monospace,Menlo,monospace; }
+  .disc-msg.bad{ background:#fdecea; border:1px solid #f3c4bd; color:#a3392e; }
+  .disc-msg .disc-remove{ background:none; border:none; padding:0; font:inherit; font-size:0.8rem; color:var(--muted); text-decoration:underline; cursor:pointer; flex:none; }
   .send-warning{
     margin-top:14px; background:#fff7e6; border:1px solid #f1d999; color:#7a5a10;
     padding:12px 14px; border-radius:12px; font-size:0.88rem;
@@ -933,7 +948,17 @@
         <button type="button" class="delivery-opt" data-region="east">East Malaysia<small>+RM13</small></button>
       </div>
 
-      <div class="total-row"><span id="orderTotalLbl">Total</span><span id="orderTotal">—</span></div>
+      <div class="total-row" id="totalRow"><span id="orderTotalLbl">Total</span><span id="orderTotal">—</span></div>
+      <div class="disc-row" id="discRow" style="display:none;"><span id="discRowLbl">Discount</span><span id="discRowAmt"></span></div>
+      <div class="pay-row" id="payRow" style="display:none;"><span>To pay · 要付</span><span id="payAmt"></span></div>
+      <div class="disc-wrap" id="discWrap">
+        <button type="button" class="disc-link" id="discLink">🎟 Have a discount code? · 有折扣码？</button>
+        <div class="disc-form" id="discForm" style="display:none;">
+          <input type="text" id="discInput" placeholder="e.g. WONO8KQ3" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="30">
+          <button type="button" id="discApply">Apply</button>
+        </div>
+        <div class="disc-msg" id="discMsg" style="display:none;"></div>
+      </div>
 
       <div class="order-fields">
         <div>
@@ -1385,7 +1410,16 @@
     if (myOrder.delivery) total += DELIVERY_OPTIONS[myOrder.delivery].fee;
     return total;
   }
-  function fmtRM(n){ return 'RM' + (Number.isInteger(n) ? n : n.toFixed(2)); }
+  function fmtRM(n){ n = Math.round(n * 100) / 100; return 'RM' + (Number.isInteger(n) ? n : n.toFixed(2)); }
+  // 🎟 Discount code = the customer's credit (made in Evvyne's bookkeeping app, kept in the
+  // credit_codes table). { code, amount, redeemedOn: order no it was used on (this tab) }
+  let discount = null;
+  function discountUsed(){
+    if (!discount) return 0;
+    const total = orderTotal();
+    return total === null ? 0 : Math.max(0, Math.min(discount.amount, total));
+  }
+  const cleanCode = (t) => String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   function stickerLabel(s){ return s ? (s.code || s.name) : ''; }
   // Short link to a sticker's big photo, for the WhatsApp message — Evvyne taps it on her
   // phone and the catalogue opens with that sticker enlarged (see openStickerFromLink).
@@ -1529,6 +1563,11 @@
     lines.push(`Delivery: ${myOrder.delivery ? DELIVERY_OPTIONS[myOrder.delivery].label : '(please tell me West or East Malaysia)'}`);
     const total = orderTotal();
     if (total !== null) lines.push(`Total: ${fmtRM(total)}${myOrder.delivery ? '' : ' + shipping'}`);
+    const dUsed = discountUsed();
+    if (dUsed > 0) {
+      lines.push(`Discount: ${discount.code} (−${fmtRM(dUsed)})`);
+      lines.push(`To pay: ${fmtRM(total - dUsed)}${myOrder.delivery ? '' : ' + shipping'}`);
+    }
     lines.push('');
     const tiktok = (document.getElementById('orderTiktok') || {}).value || '';
     const name = (document.getElementById('orderName') || {}).value || '';
@@ -1607,6 +1646,7 @@
       if (total === null) { totalEl.textContent = 'Pick a tumbler to see the total'; totalEl.className = 'soft'; }
       else { totalEl.textContent = myOrder.delivery ? fmtRM(total) : `${fmtRM(total)} + shipping`; totalEl.className = ''; }
     }
+    renderDiscount();
 
     const btn = document.getElementById('whatsappOrderBtn');
     if (btn) btn.href = `https://wa.me/evvyne?text=${encodeURIComponent(buildWhatsAppMessage())}`;
@@ -1793,6 +1833,7 @@
     bottles = [emptyBottle()]; cur = 0;
     loadBottle(bottles[0]);
     myOrder.delivery = null;
+    discount = null; showDiscMsg('', '');
     sendAttempted = false; colourWarn = false; lastRemovedBottle = null;
     if (orderNoSent) { keepOrderNo(null, false); orderNoFailed = false; } // a new order gets a new number
     ['addBottleNote', 'clearAsk', 'sendBackup', 'orderNoBig', 'glitterRemovedNote'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
@@ -2159,7 +2200,8 @@
     if (!bar) return;
     const count = [myOrder.tumbler, myOrder.sticker, myOrder.pattern].filter(Boolean).length + myOrder.addons.length + myOrder.extraStickers.length + (myOrder.promo.on ? 1 : 0);
     const nBottles = orderBottles().length;
-    const total = orderTotal();
+    const total0 = orderTotal();
+    const total = total0 === null ? null : total0 - discountUsed();
     document.getElementById('orderBarText').textContent =
       (nBottles > 1 ? `🛒 ${nBottles} tumblers` : `🛒 ${count} picked`) + (total !== null ? ` · ${fmtRM(total)}${myOrder.delivery ? '' : '+'}` : '');
     const show = (count > 0 || nBottles > 1) && !orderSectionVisible;
@@ -2304,6 +2346,8 @@
       };
     }));
     const row = rows[0];
+    const dUsed = discountUsed();
+    if (dUsed > 0) row.addons = [row.addons, `Discount: ${discount.code} (−${fmtRM(dUsed)})`].filter(Boolean).join(', ');
 
     // 1) A completely empty order (no tumbler, sticker, name or TikTok) tells Evvyne
     //    nothing — don't log it. WhatsApp still opens as normal.
@@ -2353,13 +2397,14 @@
       }
       if (waitingForOrderNo()) { e.preventDefault(); reserveOrderNo(); refreshSendState(); return; } // number is on its way — tap again in a moment
       if (!orderNo) { keepOrderNo(standInOrderNo()); showOrderNo(); }
-      orderSentSig = currentOrderSig();
-      keepOrderNo(orderNo, true); // sent: a changed or cleared order starts with a new number
-      whatsappOrderBtn.href = `https://wa.me/evvyne?text=${encodeURIComponent(buildWhatsAppMessage())}`; // make sure the number is in it
-      logOrder();
-      showSendBackup();
-      const big = document.getElementById('orderNoBig');
-      if (big) { document.getElementById('orderNoBigText').textContent = orderNo; big.style.display = ''; }
+      if (discountUsed() > 0) {
+        // With a discount code: first make sure the code is still unused and mark it used on
+        // this order — only then open WhatsApp (in this tab, since we had to wait).
+        e.preventDefault();
+        sendWithDiscount();
+        return;
+      }
+      finishSend();
     });
     document.getElementById('copyOrderNoBtn').addEventListener('click', async (e) => {
       const ok = await copyText(orderNo || '');
@@ -2384,6 +2429,112 @@
       return ok;
     } catch (e) { return false; }
   }
+  // Everything that happens when the order goes out (number kept, order saved, number shown).
+  function finishSend(){
+    orderSentSig = currentOrderSig();
+    keepOrderNo(orderNo, true); // sent: a changed or cleared order starts with a new number
+    whatsappOrderBtn.href = `https://wa.me/evvyne?text=${encodeURIComponent(buildWhatsAppMessage())}`; // make sure the number is in it
+    logOrder();
+    showSendBackup();
+    const big = document.getElementById('orderNoBig');
+    if (big) { document.getElementById('orderNoBigText').textContent = orderNo; big.style.display = ''; }
+  }
+  let discSending = false;
+  async function sendWithDiscount(){
+    if (discSending) return;
+    discSending = true;
+    const lbl = document.getElementById('waBtnLabel');
+    whatsappOrderBtn.classList.add('waiting');
+    if (lbl) lbl.textContent = '⏳ Checking your discount code…';
+    let res = null;
+    try {
+      if (client && typeof client.rpc === 'function') {
+        const call = client.rpc('redeem_credit_code', { p_code: discount.code, p_order_no: orderNo, p_order_total: orderTotal(), p_prev_order_no: discount.redeemedOn || null });
+        const timeout = new Promise(r => setTimeout(() => r({ data: null, error: { message: 'timeout' } }), 8000));
+        const { data, error } = await Promise.race([call, timeout]);
+        res = error ? null : data;
+      }
+    } catch (err) { res = null; }
+    discSending = false;
+    whatsappOrderBtn.classList.remove('waiting');
+    if (res && res.ok) {
+      discount.redeemedOn = orderNo;
+      if (typeof res.used_amount === 'number' || typeof res.used_amount === 'string') discount.amount = Math.max(Number(res.used_amount) || 0, 0) || discount.amount;
+      finishSend();
+      location.href = whatsappOrderBtn.href; // opens WhatsApp
+      refreshSendState();
+      return;
+    }
+    // Not usable any more (or we couldn't check) → take the discount off; nothing is sent.
+    const used = res && res.reason === 'used';
+    discount = null;
+    updateOrderSummary();
+    showDiscMsg('bad', used
+      ? 'This code was just used on another order — the discount is removed. Tap Send again to order without it.<br>这个折扣码刚被用掉了，已拿掉折扣。再按一次 Send 就可以下单（没有折扣）。'
+      : "We couldn't check your discount code right now, so it's removed. Tap Send again, and tell us about the code on WhatsApp.<br>暂时无法确认折扣码，已拿掉。请再按一次 Send，然后在 WhatsApp 告诉我们你的折扣码。");
+    document.getElementById('discWrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // ---- 🎟 Discount code box ----
+  function showDiscMsg(kind, html){
+    const m = document.getElementById('discMsg');
+    if (!m) return;
+    m.className = 'disc-msg' + (kind ? ' ' + kind : '');
+    m.innerHTML = html || '';
+    m.style.display = html ? '' : 'none';
+    const rm = m.querySelector('.disc-remove');
+    if (rm) rm.addEventListener('click', () => { discount = null; showDiscMsg('', ''); document.getElementById('discInput').value = ''; updateOrderSummary(); });
+  }
+  function renderDiscount(){
+    const used = discountUsed();
+    const total = orderTotal();
+    const on = used > 0;
+    document.getElementById('totalRow').classList.toggle('has-disc', on);
+    document.getElementById('discRow').style.display = on ? '' : 'none';
+    document.getElementById('payRow').style.display = on ? '' : 'none';
+    if (on) {
+      document.getElementById('discRowLbl').textContent = `Discount ${discount.code}`;
+      document.getElementById('discRowAmt').textContent = `−${fmtRM(used)}`;
+      document.getElementById('payAmt').textContent = fmtRM(total - used) + (myOrder.delivery ? '' : ' + shipping');
+    }
+    document.getElementById('discLink').style.display = discount ? 'none' : '';
+    if (discount) { document.getElementById('discForm').style.display = 'none'; }
+  }
+  document.getElementById('discLink').addEventListener('click', () => {
+    document.getElementById('discForm').style.display = '';
+    document.getElementById('discLink').style.display = 'none';
+    document.getElementById('discInput').focus();
+  });
+  document.getElementById('discInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('discApply').click(); } });
+  document.getElementById('discApply').addEventListener('click', async () => {
+    const code = cleanCode(document.getElementById('discInput').value);
+    if (code.length < 6) { showDiscMsg('bad', 'Please type the whole code (at least 6 letters / numbers).<br>请输入完整的折扣码。'); return; }
+    const btn = document.getElementById('discApply');
+    btn.disabled = true; btn.textContent = '…';
+    let res = null, failed = false;
+    try {
+      if (!client || typeof client.rpc !== 'function') failed = true;
+      else {
+        const call = client.rpc('check_credit_code', { p_code: code });
+        const timeout = new Promise(r => setTimeout(() => r({ data: null, error: { message: 'timeout' } }), 8000));
+        const { data, error } = await Promise.race([call, timeout]);
+        if (error) failed = true; else res = data;
+      }
+    } catch (err) { failed = true; }
+    btn.disabled = false; btn.textContent = 'Apply';
+    if (failed || !res) { showDiscMsg('bad', "Can't check codes right now — please tell us your code on WhatsApp.<br>暂时无法检查折扣码，请在 WhatsApp 告诉我们。"); return; }
+    if (!res.ok) {
+      showDiscMsg('bad', res.reason === 'too_many'
+        ? 'Too many tries — please wait 15 minutes and try again.<br>试太多次了，请 15 分钟后再试。'
+        : "This code isn't valid or has already been used.<br>这个折扣码无效或已经用过了。");
+      return;
+    }
+    discount = { code: res.code || code, amount: Number(res.amount) || 0, redeemedOn: null };
+    document.getElementById('discInput').value = discount.code;
+    showDiscMsg('ok', `<span>✓ <b>${discount.code}</b> applied · 已使用</span><button type="button" class="disc-remove">Remove</button>`);
+    updateOrderSummary();
+  });
+
   function showSendBackup(){
     const box = document.getElementById('sendBackup');
     if (!box) return;
@@ -3024,7 +3175,7 @@
         addons: myOrder.addons.map(a => a.id), customName: myOrder.customName,
         extraOn: myOrder.extraOn, extra: myOrder.extraStickers.map(x => x.id),
         promoOn: myOrder.promo.on, promoSticker: myOrder.promo.sticker && myOrder.promo.sticker.id, promoPattern: myOrder.promo.pattern && myOrder.promo.pattern.id,
-        name: val('orderName'), tiktok: val('orderTiktok'),
+        name: val('orderName'), tiktok: val('orderTiktok'), discount,
       }));
     } catch (e) {}
     return true;
@@ -3063,6 +3214,10 @@
     }
     const setVal = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
     setVal('orderName', saved.name); setVal('orderTiktok', saved.tiktok);
+    if (saved.discount && saved.discount.code) {
+      discount = { code: String(saved.discount.code), amount: Number(saved.discount.amount) || 0, redeemedOn: saved.discount.redeemedOn || null };
+      showDiscMsg('ok', `<span>✓ <b>${discount.code}</b> applied · 已使用</span><button type="button" class="disc-remove">Remove</button>`);
+    }
     renderTumblerOptions();
     renderPatternOptions();
     refreshStickerMarks();

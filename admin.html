@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-17-1">
+<meta name="sbe-build" content="2026-11-19-1">
 <link rel="manifest" href="admin.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="admin-icon-192.png">
 <link rel="apple-touch-icon" href="admin-icon-180.png">
@@ -453,6 +453,8 @@
   .ov-st small, .ov-sub{ display:block; font-weight:400; color:var(--muted); font-size:0.75rem; }
   .ov-chip{ display:inline-flex; align-items:center; gap:5px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:2px 9px; font-size:0.8rem; margin:2px 4px 2px 0; font-weight:600; }
   .ov-chip img{ width:20px; height:20px; border-radius:5px; object-fit:cover; }
+  .ov-code{ font-family:ui-monospace,Menlo,monospace; background:#e9f6ea; color:#2e6b36; border-radius:6px; padding:1px 6px; }
+  .ov-warn{ margin-top:8px; background:#fff3d6; color:#8a5a00; border-radius:10px; padding:8px 10px; font-size:0.8rem; line-height:1.5; }
   .o-form{ flex:1 1 100%; display:flex; flex-wrap:wrap; gap:6px; align-items:stretch; }
   .order-row:not(.editing) .o-form{ display:none; }
   .order-row.editing .o-view{ display:none; }
@@ -4225,6 +4227,26 @@
   }
 
   const COLOUR_RE = /^Colour:\s*(.+)$/i;
+  // 🎟 Discount code (= the customer's credit): "Discount: WONO8KQ3 (−RM10)" — taken OFF the total.
+  const DISCOUNT_RE = /^(?:Discount|Credit):\s*([A-Za-z0-9-]+)\s*\(\s*[−–-]\s*RM\s?(\d+(?:\.\d+)?)\s*\)/i;
+  const discountOf = (addonsText) => {
+    const seg = String(addonsText || '').split(',').map(x => x.trim()).find(x => DISCOUNT_RE.test(x));
+    if (!seg) return null;
+    const m = seg.match(DISCOUNT_RE);
+    return { code: m[1].toUpperCase(), amount: parseFloat(m[2]) };
+  };
+  let creditCodesAdmin = null; // code → row from credit_codes (null = table not set up / not loaded)
+  function discountWarning(o){
+    const d = discountOf(o.addons);
+    if (!d || !creditCodesAdmin) return '';
+    const c = creditCodesAdmin[d.code];
+    let msg = '';
+    if (!c) msg = `This code isn't in your credit codes — check before accepting this payment.<br>找不到这个折扣码，收钱前先确认。`;
+    else if (c.status === 'void') msg = `This code was cancelled (void) — check before accepting this payment.<br>这个折扣码已作废，收钱前先确认。`;
+    else if (c.status === 'active') msg = `This code isn't marked as used yet — check before accepting this payment.<br>这个折扣码还没被标成已用，收钱前先确认。`;
+    else if (o.order_no && c.used_order_no && c.used_order_no !== o.order_no) msg = `This code is used on order <b>${escAttr(c.used_order_no)}</b>, not this one — check before accepting this payment.<br>这个折扣码用在 ${escAttr(c.used_order_no)}，不是这张单，收钱前先确认。`;
+    return msg ? `<div class="ov-warn">⚠️ ${msg}</div>` : '';
+  }
   const orderColour = (addonsText) => { const seg = String(addonsText || '').split(',').map(x => x.trim()).find(x => COLOUR_RE.test(x)); return seg ? seg.match(COLOUR_RE)[1].trim() : ''; };
   function colourOptionsHtml(tumblerText, value){
     const list = coloursOfTumblerText(tumblerText).map(c => c.name);
@@ -4256,7 +4278,8 @@
       const checked = parts.includes(label) ? 'checked' : '';
       return `<label class="addon-check-label"><input type="checkbox" class="o-addon-check" data-label="${label}" ${checked}> ${label}</label>`;
     }).join('');
-    const shownLeftover = leftover.filter(p => !MULTI_RE.test(p) && !COLOUR_RE.test(p));
+    const shownLeftover = leftover.filter(p => !MULTI_RE.test(p) && !COLOUR_RE.test(p) && !DISCOUNT_RE.test(p));
+    const discNow = discountOf(leftover.join(', '));
     const leftoverNote = leftover.length
       ? `<span class="addon-legacy-note" data-leftover="${leftover.join('|||')}">${shownLeftover.length ? `+ ${shownLeftover.join(', ')} (not in current add-on list)` : ''}</span>`
       : `<span class="addon-legacy-note" data-leftover=""></span>`;
@@ -4270,7 +4293,8 @@
       ? `<span class="promo-note" data-promo="${promoInfo.join('|||').replace(/"/g, '&quot;')}">🎁 ${promoInfo.map(p => p.replace(/^promo (bottle|pattern):\s*/i, '')).join(' · ')}</span>`
         + `<label class="promo-sticker-label">🎁 Promo sticker <select class="o-promo-sticker" disabled>${stickerOptionsHtml(promoSticker)}</select></label>`
       : '';
-    return (checkboxes || '<span class="hint" style="margin:0;">No add-ons set up yet.</span>') + nameBox + extraBoxes + promoBox + leftoverNote;
+    const discNote = discNow ? `<span class="promo-note" style="background:#e9f6ea;color:#2e6b36;">🎟 Discount ${escAttr(discNow.code)} −${fmtRMAdmin(discNow.amount)} <small>(from the customer's credit — can't be edited here)</small></span>` : '';
+    return (checkboxes || '<span class="hint" style="margin:0;">No add-ons set up yet.</span>') + nameBox + extraBoxes + promoBox + discNote + leftoverNote;
   }
 
   // Reassembles an order row's add-ons text from its checked boxes, the name-on-tumbler
@@ -4319,7 +4343,7 @@
     total += amountIn((row.querySelector('.o-pattern') || {}).value);
     row.querySelectorAll('.o-addon-check:checked').forEach(cb => { total += amountIn(cb.dataset.label); });
     const leftoverAttr = row.querySelector('.addon-legacy-note');
-    if (leftoverAttr && leftoverAttr.dataset.leftover) leftoverAttr.dataset.leftover.split('|||').forEach(seg => { total += amountIn(seg); });
+    if (leftoverAttr && leftoverAttr.dataset.leftover) leftoverAttr.dataset.leftover.split('|||').forEach(seg => { total += DISCOUNT_RE.test(seg.trim()) ? -amountIn(seg) : amountIn(seg); });
     const delivery = row.querySelector('.o-delivery');
     if (delivery) total += amountIn(delivery.value);
     row.querySelectorAll('.o-extra-sticker').forEach(sel => { if (sel.value) total += parseFloat(sel.dataset.price) || EXTRA_STICKER_PRICE_ADMIN; });
@@ -4336,6 +4360,9 @@
     const o = allOrdersAdmin.find(x => x.id === row.dataset.id);
     const g = o && orderGroup(o);
     const shipNote = noDelivery ? (g && g.n > 1 ? ' (shipping is on Bottle 1)' : ' + shipping') : '';
+    const leftoverAttr = row.querySelector('.addon-legacy-note');
+    const disc = leftoverAttr && leftoverAttr.dataset.leftover ? discountOf(leftoverAttr.dataset.leftover.split('|||').join(', ')) : null;
+    if (total !== null && disc) { el.innerHTML = `<span style="font-weight:600;font-size:0.85rem;color:var(--muted);">Total ${fmtRMAdmin(total + disc.amount)} · Discount −${fmtRMAdmin(disc.amount)}</span><br>To pay: ${fmtRMAdmin(total)}${shipNote}`; return; }
     el.textContent = total === null ? 'Total: —' : `Total: RM${Number.isInteger(total) ? total : total.toFixed(2)}${shipNote}`;
   }
 
@@ -4397,10 +4424,11 @@
     const parts = String(o.addons || '').split(',').map(x => x.trim()).filter(Boolean);
     const { customName, extraStickers, promoInfo, promoSticker, rest } = splitCustomName(parts);
     const colour = orderColour(o.addons);
+    const disc = discountOf(o.addons);
     const line = (k, v) => `<span class="ov-k">${k}</span>${v}`;
     const val = (t) => t ? `<span class="ov-v">${escAttr(t)}</span>` : '<span class="ov-v none">—</span>';
     const chips = [];
-    rest.filter(p => !MULTI_RE.test(p) && !COLOUR_RE.test(p)).forEach(p => chips.push(`<span class="ov-chip">${escAttr(p.replace(/\s*\((\+?RM[^)]*)\)\s*$/i, ' $1'))}</span>`));
+    rest.filter(p => !MULTI_RE.test(p) && !COLOUR_RE.test(p) && !DISCOUNT_RE.test(p)).forEach(p => chips.push(`<span class="ov-chip">${escAttr(p.replace(/\s*\((\+?RM[^)]*)\)\s*$/i, ' $1'))}</span>`));
     if (customName) chips.push(`<span class="ov-chip">✏️ Name: ${escAttr(customName)}</span>`);
     extraStickers.filter(x => x.code).forEach(x => chips.push(orderChipSticker(x.code, `Extra sticker ${x.code} +RM${x.price}`)));
     const g = orderGroup(o);
@@ -4414,8 +4442,9 @@
       chips.length ? line('➕ Add-ons', `<span class="ov-v">${chips.join('')}</span>`) : '',
       promoInfo.length || promoSticker ? line('🎁 Promo', `<span class="ov-v">${promoInfo.map(p => `<span class="ov-chip">${escAttr(p.replace(/^promo (bottle|pattern):\s*/i, ''))}</span>`).join('')}${promoSticker ? orderChipSticker(promoSticker, promoSticker) : ''}</span>`) : '',
       ('delivery' in o) ? line('🚚 Delivery', delivery) : '',
+      disc ? line('🎟 Discount', `<span class="ov-v"><span class="ov-code">${escAttr(disc.code)}</span> −${fmtRMAdmin(disc.amount)} <span class="ov-sub" style="display:inline;">(credit)</span></span>`) : '',
     ].join('');
-    return `<div class="ov-who"><b>${escAttr(o.customer_name || '—')}</b>${tiktok ? ` <span>· ${escAttr(tiktok.startsWith('@') ? tiktok : '@' + tiktok)}</span>` : ''}</div><div class="ov-grid">${rows}</div>`;
+    return `<div class="ov-who"><b>${escAttr(o.customer_name || '—')}</b>${tiktok ? ` <span>· ${escAttr(tiktok.startsWith('@') ? tiktok : '@' + tiktok)}</span>` : ''}</div><div class="ov-grid">${rows}</div>${discountWarning(o)}`;
   }
   // The editable boxes (shown only after Edit; rebuilt on Cancel).
   function orderFormHtml(o){
@@ -4440,6 +4469,10 @@
   async function renderOrders(){
     const el = document.getElementById('ordersList');
     await loadOrdersArchive();
+    try {
+      const cc = await client.from('credit_codes').select('code,status,used_order_no,used_amount');
+      creditCodesAdmin = cc.error ? null : Object.fromEntries((cc.data || []).map(r => [String(r.code).toUpperCase(), r]));
+    } catch (e) { creditCodesAdmin = null; }
     const { data, error } = await client.from('orders').select('*').order('created_at', { ascending: false });
     if (error) { el.textContent = error.message; return; }
     allOrdersAdmin = data || [];
@@ -4690,7 +4723,7 @@
   function orderDataTotal(o){
     if (!o.tumbler) return null;
     let t = amountIn(o.tumbler) + amountIn(o.pattern) + amountIn(o.delivery);
-    String(o.addons || '').split(',').forEach(seg => { t += amountIn(seg); });
+    String(o.addons || '').split(',').forEach(seg => { t += DISCOUNT_RE.test(seg.trim()) ? -amountIn(seg) : amountIn(seg); });
     return t;
   }
   const fmtRMAdmin = (n) => 'RM' + (Number.isInteger(n) ? n : n.toFixed(2));
@@ -4815,7 +4848,7 @@
         if (extra) { count(stickers, extra[1]); count(addons, 'Extra sticker'); return; }
         const promoSticker = seg.match(/^Promo sticker:\s*([^\s(]+)/i);
         if (promoSticker) { count(stickers, promoSticker[1]); return; }
-        if (/^(Promo pattern|Name on tumbler|Multi-bottle order|Colour):/i.test(seg)) return;
+        if (/^(Promo pattern|Name on tumbler|Multi-bottle order|Colour):/i.test(seg) || DISCOUNT_RE.test(seg)) return;
         count(addons, seg.replace(/\s*\(\+?RM[^)]*\)/i, '').trim());
       });
     });
