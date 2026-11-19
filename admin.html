@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-19-1">
+<meta name="sbe-build" content="2026-11-19-2">
 <link rel="manifest" href="admin.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="admin-icon-192.png">
 <link rel="apple-touch-icon" href="admin-icon-180.png">
@@ -4236,6 +4236,12 @@
     return { code: m[1].toUpperCase(), amount: parseFloat(m[2]) };
   };
   let creditCodesAdmin = null; // code → row from credit_codes (null = table not set up / not loaded)
+  // The reason you wrote when giving the credit (bookkeeping app → credit_codes.note). Only you see it.
+  function discountNote(code){
+    const c = creditCodesAdmin && creditCodesAdmin[code];
+    const note = c && c.note ? String(c.note).trim() : '';
+    return note ? `<span class="ov-sub" style="margin-top:3px;">📝 ${escAttr(note)}</span>` : '';
+  }
   function discountWarning(o){
     const d = discountOf(o.addons);
     if (!d || !creditCodesAdmin) return '';
@@ -4442,7 +4448,7 @@
       chips.length ? line('➕ Add-ons', `<span class="ov-v">${chips.join('')}</span>`) : '',
       promoInfo.length || promoSticker ? line('🎁 Promo', `<span class="ov-v">${promoInfo.map(p => `<span class="ov-chip">${escAttr(p.replace(/^promo (bottle|pattern):\s*/i, ''))}</span>`).join('')}${promoSticker ? orderChipSticker(promoSticker, promoSticker) : ''}</span>`) : '',
       ('delivery' in o) ? line('🚚 Delivery', delivery) : '',
-      disc ? line('🎟 Discount', `<span class="ov-v"><span class="ov-code">${escAttr(disc.code)}</span> −${fmtRMAdmin(disc.amount)} <span class="ov-sub" style="display:inline;">(credit)</span></span>`) : '',
+      disc ? line('🎟 Discount', `<span class="ov-v"><span class="ov-code">${escAttr(disc.code)}</span> −${fmtRMAdmin(disc.amount)} <span class="ov-sub" style="display:inline;">(credit)</span>${discountNote(disc.code)}</span>`) : '',
     ].join('');
     return `<div class="ov-who"><b>${escAttr(o.customer_name || '—')}</b>${tiktok ? ` <span>· ${escAttr(tiktok.startsWith('@') ? tiktok : '@' + tiktok)}</span>` : ''}</div><div class="ov-grid">${rows}</div>${discountWarning(o)}`;
   }
@@ -4470,7 +4476,7 @@
     const el = document.getElementById('ordersList');
     await loadOrdersArchive();
     try {
-      const cc = await client.from('credit_codes').select('code,status,used_order_no,used_amount');
+      const cc = await client.from('credit_codes').select('code,status,used_order_no,used_amount,note');
       creditCodesAdmin = cc.error ? null : Object.fromEntries((cc.data || []).map(r => [String(r.code).toUpperCase(), r]));
     } catch (e) { creditCodesAdmin = null; }
     const { data, error } = await client.from('orders').select('*').order('created_at', { ascending: false });
