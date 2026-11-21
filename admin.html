@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-21-2">
+<meta name="sbe-build" content="2026-11-21-3">
 <link rel="manifest" href="admin.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="admin-icon-192.png">
 <link rel="apple-touch-icon" href="admin-icon-180.png">
@@ -840,6 +840,7 @@
     <div class="card" id="ordersCard">
       <h2 style="margin-top:0;font-size:1.1rem;">📦 Orders</h2>
       <p class="hint">Orders sent from the catalogue show up here automatically. Check them against your WhatsApp chats, then press Mark Paid.</p>
+      <button class="add-new-btn" id="addOrderBtn" style="margin:0 0 12px;">+ Add order</button>
       <div class="orders-toolbar">
         <input type="search" id="ordersSearch" placeholder="Search order no (1102K05), name, TikTok, sticker…">
         <select id="ordersPeriod">
@@ -861,7 +862,6 @@
       <p class="hint" id="ordersCount" style="margin:0 0 10px;"></p>
       <button class="clear-empty-btn" id="clearEmptyOrdersBtn" style="display:none;"></button>
       <div id="ordersList">Loading…</div>
-      <button class="add-new-btn" id="addOrderBtn">+ Add order</button>
     </div>
   </div>
 
