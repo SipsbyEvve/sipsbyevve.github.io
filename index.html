@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-19-2">
+<meta name="sbe-build" content="2026-11-21-1">
 <link rel="manifest" href="site.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="site-icon-192.png">
 <link rel="apple-touch-icon" href="site-icon-180.png">
@@ -2325,8 +2325,60 @@
     return missing;
   }
   let lastLoggedOrder = null; // in-memory fallback when localStorage isn't available
+  // ---- Orders that haven't reached the database yet wait here (this phone/browser only) and
+  // are sent again: right away, when the customer comes back from WhatsApp, and on their next
+  // visit. Nothing is lost if the connection drops, or the page is left while still saving. ----
+  const PENDING_KEY = 'sbe_pending_orders';
+  const readPending = () => { try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]') || []; } catch (e) { return []; } };
+  const writePending = (list) => { try { if (list.length) localStorage.setItem(PENDING_KEY, JSON.stringify(list)); else localStorage.removeItem(PENDING_KEY); } catch (e) {} };
+  const inFlight = new Set(); // orders being saved right now (never sent twice at the same time)
+  function insertOrderRows(rows){
+    // If a newer column ("delivery", "order_no") isn't in Supabase yet, save again without it.
+    const OPTIONAL_COLS = ['delivery', 'order_no'];
+    const attempt = (payload, triesLeft) => client.from('orders').insert(payload).then(({ error }) => {
+      if (!error) return true;
+      const col = OPTIONAL_COLS.find(c => c in payload[0] && new RegExp(c, 'i').test(error.message || ''));
+      if (col && triesLeft > 0) return attempt(payload.map(({ [col]: _dropped, ...rest }) => rest), triesLeft - 1);
+      console.error('order log error:', error.message || JSON.stringify(error));
+      return false;
+    }, (err) => { console.error('order log error:', err && err.message); return false; });
+    try { return attempt(rows, OPTIONAL_COLS.length); } catch (err) { return Promise.resolve(false); }
+  }
+  // Saves one order (its rows) with a waiting-list entry, so it's retried if this try fails.
+  function saveOrderRows(rows){
+    const key = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const list = readPending(); list.push({ key, t: Date.now(), tries: 0, rows }); writePending(list);
+    inFlight.add(key);
+    return insertOrderRows(rows).then(ok => {
+      inFlight.delete(key);
+      if (ok) writePending(readPending().filter(x => x.key !== key));
+      return ok;
+    });
+  }
+  let flushingPending = false;
+  async function flushPendingOrders(){
+    if (!client || flushingPending) return;
+    flushingPending = true;
+    try {
+      const WEEK = 7 * 24 * 3600e3;
+      for (const item of readPending()) {
+        if (Date.now() - item.t > WEEK || item.tries >= 30) { writePending(readPending().filter(x => x.key !== item.key)); continue; }
+        if (inFlight.has(item.key)) continue; // still being saved
+        inFlight.add(item.key);
+        const ok = await insertOrderRows(item.rows);
+        inFlight.delete(item.key);
+        writePending(ok ? readPending().filter(x => x.key !== item.key) : readPending().map(x => x.key === item.key ? { ...x, tries: (x.tries || 0) + 1 } : x));
+      }
+    } finally { flushingPending = false; }
+  }
+  setTimeout(flushPendingOrders, 3000);
+  setInterval(flushPendingOrders, 20000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(flushPendingOrders, 1500); });
+  window.addEventListener('online', () => setTimeout(flushPendingOrders, 1500));
+
+  // Returns a promise: true once the order is in the database (or there was nothing to save).
   function logOrder(){
-    if (!client) return;
+    if (!client) return Promise.resolve(false);
     // One row per tumbler. Several tumblers share a tag ("Multi-bottle order: 1 of 2 #K7Q2")
     // so admin can show them together; shipping is saved on the first one only.
     const list = orderBottles();
@@ -2352,7 +2404,7 @@
 
     // 1) A completely empty order (no tumbler, sticker, name or TikTok) tells Evvyne
     //    nothing — don't log it. WhatsApp still opens as normal.
-    if (!row.tumbler && !row.sticker_code && !row.customer_name && !row.tiktok_handle) return;
+    if (!row.tumbler && !row.sticker_code && !row.customer_name && !row.tiktok_handle) return Promise.resolve(true);
 
     // 2) Same browser sending the exact same order again (double-tap, or coming back
     //    from WhatsApp and tapping Send again) isn't a new order — skip it. Anything
@@ -2363,26 +2415,11 @@
     const DUP_WINDOW_MS = 24 * 60 * 60 * 1000;
     let last = lastLoggedOrder;
     try { last = JSON.parse(localStorage.getItem('sbe_last_order') || 'null') || last; } catch (e) {}
-    if (last && last.sig === signature && Date.now() - last.t < DUP_WINDOW_MS) return;
+    if (last && last.sig === signature && Date.now() - last.t < DUP_WINDOW_MS) return Promise.resolve(true);
     lastLoggedOrder = { sig: signature, t: Date.now() };
     try { localStorage.setItem('sbe_last_order', JSON.stringify(lastLoggedOrder)); } catch (e) {}
 
-    // If a newer column ("delivery") hasn't been added in Supabase yet, don't lose
-    // the order — save it again without that field.
-    const OPTIONAL_COLS = ['delivery', 'order_no'];
-    const insert = (payload, triesLeft = OPTIONAL_COLS.length) => client.from('orders').insert(payload).then(({ error }) => {
-      if (!error) return;
-      const col = OPTIONAL_COLS.find(c => c in payload[0] && new RegExp(c, 'i').test(error.message || ''));
-      if (col && triesLeft > 0) {
-        return insert(payload.map(({ [col]: _dropped, ...rest }) => rest), triesLeft - 1);
-      }
-      console.error('order log error:', error.message || JSON.stringify(error));
-    });
-    try {
-      insert(rows).catch(err => console.error('order log error:', err && err.message));
-    } catch (err) {
-      console.error('order log error:', err && err.message);
-    }
+    return saveOrderRows(rows);
   }
   const whatsappOrderBtn = document.getElementById('whatsappOrderBtn');
   if (whatsappOrderBtn) {
@@ -2435,10 +2472,11 @@
     orderSentSig = currentOrderSig();
     keepOrderNo(orderNo, true); // sent: a changed or cleared order starts with a new number
     whatsappOrderBtn.href = `https://wa.me/evvyne?text=${encodeURIComponent(buildWhatsAppMessage())}`; // make sure the number is in it
-    logOrder();
+    const saved = logOrder();
     showSendBackup();
     const big = document.getElementById('orderNoBig');
     if (big) { document.getElementById('orderNoBigText').textContent = orderNo; big.style.display = ''; }
+    return saved;
   }
   let discSending = false;
   async function sendWithDiscount(){
@@ -2461,7 +2499,13 @@
     if (res && res.ok) {
       discount.redeemedOn = orderNo;
       if (typeof res.used_amount === 'number' || typeof res.used_amount === 'string') discount.amount = Math.max(Number(res.used_amount) || 0, 0) || discount.amount;
-      finishSend();
+      // WhatsApp opens in this same tab, so wait (up to 4s) until the order is saved — leaving the
+      // page too early could cut the save off. (If it still isn't saved, it's retried later.)
+      if (lbl) lbl.textContent = '⏳ Sending…';
+      whatsappOrderBtn.classList.add('waiting');
+      const saved = finishSend();
+      await Promise.race([saved, new Promise(r => setTimeout(r, 4000))]);
+      whatsappOrderBtn.classList.remove('waiting');
       location.href = whatsappOrderBtn.href; // opens WhatsApp
       refreshSendState();
       return;
