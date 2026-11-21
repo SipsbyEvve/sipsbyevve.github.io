@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="sbe-build" content="2026-11-19-2">
+<meta name="sbe-build" content="2026-11-21-2">
 <link rel="manifest" href="admin.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="admin-icon-192.png">
 <link rel="apple-touch-icon" href="admin-icon-180.png">
@@ -454,6 +454,16 @@
   .ov-chip{ display:inline-flex; align-items:center; gap:5px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:2px 9px; font-size:0.8rem; margin:2px 4px 2px 0; font-weight:600; }
   .ov-chip img{ width:20px; height:20px; border-radius:5px; object-fit:cover; }
   .ov-code{ font-family:ui-monospace,Menlo,monospace; background:#e9f6ea; color:#2e6b36; border-radius:6px; padding:1px 6px; }
+  .o-disc-box{ flex:1 1 100%; border:1.5px dashed #bfe3c3; background:#f4fbf4; border-radius:12px; padding:10px; font-size:0.85rem; }
+  .o-disc-box .dc-l{ font-weight:700; margin-bottom:6px; }
+  .o-disc-box .dc-row{ display:flex; gap:8px; }
+  .o-disc-box .dc-input{ flex:1; min-width:0; font-family:ui-monospace,Menlo,monospace; font-weight:700; text-transform:uppercase; }
+  .o-disc-box .dc-check{ margin-top:0; padding:7px 14px; width:auto; }
+  .o-disc-box .dc-remove{ margin:0 0 0 6px; padding:3px 9px; font-size:0.75rem; width:auto; }
+  .o-disc-box .dc-msg{ margin-top:6px; color:var(--muted); line-height:1.5; }
+  .o-disc-box .dc-msg:empty{ display:none; }
+  .o-disc-box .dc-msg.ok{ color:#2e6b36; }
+  .o-disc-box .dc-msg.bad{ color:#a3392e; }
   .ov-warn{ margin-top:8px; background:#fff3d6; color:#8a5a00; border-radius:10px; padding:8px 10px; font-size:0.8rem; line-height:1.5; }
   .o-form{ flex:1 1 100%; display:flex; flex-wrap:wrap; gap:6px; align-items:stretch; }
   .order-row:not(.editing) .o-form{ display:none; }
@@ -4233,14 +4243,58 @@
     const seg = String(addonsText || '').split(',').map(x => x.trim()).find(x => DISCOUNT_RE.test(x));
     if (!seg) return null;
     const m = seg.match(DISCOUNT_RE);
-    return { code: m[1].toUpperCase(), amount: parseFloat(m[2]) };
+    return { code: m[1].toUpperCase(), amount: parseFloat(m[2]), byAdmin: /·\s*admin\s*$/i.test(seg) };
   };
   let creditCodesAdmin = null; // code → row from credit_codes (null = table not set up / not loaded)
   // The reason you wrote when giving the credit (bookkeeping app → credit_codes.note). Only you see it.
-  function discountNote(code){
+  function discountNote(code, byAdmin){
     const c = creditCodesAdmin && creditCodesAdmin[code];
     const note = c && c.note ? String(c.note).trim() : '';
-    return note ? `<span class="ov-sub" style="margin-top:3px;">📝 ${escAttr(note)}</span>` : '';
+    const bits = [note ? `📝 ${escAttr(note)}` : '', byAdmin ? 'added in admin' : ''].filter(Boolean);
+    return bits.length ? `<span class="ov-sub" style="margin-top:3px;">${bits.join(' · ')}</span>` : '';
+  }
+  // ---- 🎟 Discount box in Edit mode (add a customer's code by hand / remove it) ----
+  function discBoxHtml(o){
+    const g = orderGroup(o);
+    if (g && g.n > 1) return `<div class="o-disc-box"><div class="dc-l">🎟 Discount code</div><div class="dc-msg">Put the code on Bottle 1 of this order · 折扣放在 Bottle 1。</div></div>`;
+    const d = discountOf(o.addons);
+    if (d) return `<div class="o-disc-box"><div class="dc-l">🎟 Discount code</div><div><span class="ov-code">${escAttr(d.code)}</span> −${fmtRMAdmin(d.amount)} <button type="button" class="secondary dc-remove">✕ Remove</button></div><div class="dc-msg"></div></div>`;
+    if (!o.order_no) return `<div class="o-disc-box"><div class="dc-l">🎟 Discount code</div><div class="dc-msg">This order has no order number, so a code can't be added.</div></div>`;
+    return `<div class="o-disc-box"><div class="dc-l">🎟 Discount code</div><div class="dc-row"><input type="text" class="dc-input" placeholder="Code · 折扣码" autocomplete="off" autocapitalize="characters" spellcheck="false"><button type="button" class="dc-check">Check</button></div><div class="dc-msg"></div></div>`;
+  }
+  const getLeftover = (row) => { const a = row.querySelector('.addon-legacy-note'); return a && a.dataset.leftover ? a.dataset.leftover.split('|||') : []; };
+  const setLeftover = (row, list) => { const a = row.querySelector('.addon-legacy-note'); if (a) a.dataset.leftover = list.join('|||'); };
+  async function onDiscBoxClick(e, row, order){
+    const box = row.querySelector('.o-disc-box');
+    if (!box) return;
+    const msg = box.querySelector('.dc-msg');
+    if (e.target.closest('.dc-remove')) {
+      setLeftover(row, getLeftover(row).filter(p => !DISCOUNT_RE.test(p.trim())));
+      box.innerHTML = `<div class="dc-l">🎟 Discount code</div><div class="dc-row"><input type="text" class="dc-input" placeholder="Code · 折扣码" autocomplete="off" autocapitalize="characters" spellcheck="false"><button type="button" class="dc-check">Check</button></div><div class="dc-msg">Removed — press <b>Save</b> and the code can be used again. · 按 Save 之后 code 变回可以用。</div>`;
+      refreshOrderRowTotal(row);
+      return;
+    }
+    if (!e.target.closest('.dc-check')) return;
+    const input = box.querySelector('.dc-input');
+    const code = String(input.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length < 6) { msg.className = 'dc-msg bad'; msg.textContent = 'Type the whole code (6–20 letters / numbers).'; return; }
+    msg.className = 'dc-msg'; msg.textContent = 'Checking…';
+    const { data: c, error } = await client.from('credit_codes').select('*').eq('code', code).maybeSingle();
+    if (error) { msg.className = 'dc-msg bad'; msg.textContent = '⚠️ ' + error.message; return; }
+    const old = discountOf(order.addons);
+    const ownOld = old && old.code === code; // putting back the code this order already had
+    if (!c) { msg.className = 'dc-msg bad'; msg.textContent = "✕ Can't find this code · 找不到这个折扣码"; return; }
+    if (c.status === 'void') { msg.className = 'dc-msg bad'; msg.textContent = '✕ This code was cancelled (void) · 这个折扣码已作废'; return; }
+    // Already used on THIS order number (e.g. the customer's order didn't save and you're adding it
+    // back by hand) is fine — it's this order's own discount.
+    if (c.status === 'used' && c.used_order_no !== order.order_no) { msg.className = 'dc-msg bad'; msg.textContent = `✕ This code is already used on ${c.used_order_no || 'another order'} · 已经用在 ${c.used_order_no || '别的单'}`; return; }
+    const gross = orderRowTotal(row);
+    const amount = Math.max(0, Math.min(Number(c.amount) || 0, gross === null ? Number(c.amount) || 0 : gross));
+    setLeftover(row, [...getLeftover(row).filter(p => !DISCOUNT_RE.test(p.trim())), `Discount: ${code} (−RM${Number.isInteger(amount) ? amount : amount.toFixed(2)}) · admin`]);
+    box.querySelector('.dc-row').outerHTML = `<div><span class="ov-code">${escAttr(code)}</span> −${fmtRMAdmin(amount)} <button type="button" class="secondary dc-remove">✕ Remove</button></div>`;
+    msg.className = 'dc-msg ok';
+    msg.innerHTML = `✓ ${fmtRMAdmin(Number(c.amount) || 0)} credit${c.customer_name ? ' · ' + escAttr(c.customer_name) : ''}${c.note ? '<br>📝 ' + escAttr(c.note) : ''}<br>Press <b>Save</b> to use it — the code will be marked used on ${escAttr(order.order_no)}. · 按 Save 之后才会扣。`;
+    refreshOrderRowTotal(row);
   }
   function discountWarning(o){
     const d = discountOf(o.addons);
@@ -4285,7 +4339,6 @@
       return `<label class="addon-check-label"><input type="checkbox" class="o-addon-check" data-label="${label}" ${checked}> ${label}</label>`;
     }).join('');
     const shownLeftover = leftover.filter(p => !MULTI_RE.test(p) && !COLOUR_RE.test(p) && !DISCOUNT_RE.test(p));
-    const discNow = discountOf(leftover.join(', '));
     const leftoverNote = leftover.length
       ? `<span class="addon-legacy-note" data-leftover="${leftover.join('|||')}">${shownLeftover.length ? `+ ${shownLeftover.join(', ')} (not in current add-on list)` : ''}</span>`
       : `<span class="addon-legacy-note" data-leftover=""></span>`;
@@ -4299,8 +4352,7 @@
       ? `<span class="promo-note" data-promo="${promoInfo.join('|||').replace(/"/g, '&quot;')}">🎁 ${promoInfo.map(p => p.replace(/^promo (bottle|pattern):\s*/i, '')).join(' · ')}</span>`
         + `<label class="promo-sticker-label">🎁 Promo sticker <select class="o-promo-sticker" disabled>${stickerOptionsHtml(promoSticker)}</select></label>`
       : '';
-    const discNote = discNow ? `<span class="promo-note" style="background:#e9f6ea;color:#2e6b36;">🎟 Discount ${escAttr(discNow.code)} −${fmtRMAdmin(discNow.amount)} <small>(from the customer's credit — can't be edited here)</small></span>` : '';
-    return (checkboxes || '<span class="hint" style="margin:0;">No add-ons set up yet.</span>') + nameBox + extraBoxes + promoBox + discNote + leftoverNote;
+    return (checkboxes || '<span class="hint" style="margin:0;">No add-ons set up yet.</span>') + nameBox + extraBoxes + promoBox + leftoverNote;
   }
 
   // Reassembles an order row's add-ons text from its checked boxes, the name-on-tumbler
@@ -4448,7 +4500,7 @@
       chips.length ? line('➕ Add-ons', `<span class="ov-v">${chips.join('')}</span>`) : '',
       promoInfo.length || promoSticker ? line('🎁 Promo', `<span class="ov-v">${promoInfo.map(p => `<span class="ov-chip">${escAttr(p.replace(/^promo (bottle|pattern):\s*/i, ''))}</span>`).join('')}${promoSticker ? orderChipSticker(promoSticker, promoSticker) : ''}</span>`) : '',
       ('delivery' in o) ? line('🚚 Delivery', delivery) : '',
-      disc ? line('🎟 Discount', `<span class="ov-v"><span class="ov-code">${escAttr(disc.code)}</span> −${fmtRMAdmin(disc.amount)} <span class="ov-sub" style="display:inline;">(credit)</span>${discountNote(disc.code)}</span>`) : '',
+      disc ? line('🎟 Discount', `<span class="ov-v"><span class="ov-code">${escAttr(disc.code)}</span> −${fmtRMAdmin(disc.amount)} <span class="ov-sub" style="display:inline;">(credit)</span>${discountNote(disc.code, disc.byAdmin)}</span>`) : '',
     ].join('');
     return `<div class="ov-who"><b>${escAttr(o.customer_name || '—')}</b>${tiktok ? ` <span>· ${escAttr(tiktok.startsWith('@') ? tiktok : '@' + tiktok)}</span>` : ''}</div><div class="ov-grid">${rows}</div>${discountWarning(o)}`;
   }
@@ -4462,7 +4514,8 @@
         <select class="o-sticker" disabled style="min-width:130px;">${stickerOptionsHtml(o.sticker_code)}</select>
         <select class="o-pattern" disabled style="flex:1;min-width:130px;">${patternOptionsHtml(o.pattern)}</select>
         ${'delivery' in o ? `<select class="o-delivery" disabled style="flex:1;min-width:150px;">${deliveryOptionsHtml(o.delivery)}</select>` : ''}
-        <div class="o-addons-group" style="flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">${addonsCheckboxesHtml(o.addons)}</div>`;
+        <div class="o-addons-group" style="flex:1 1 100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">${addonsCheckboxesHtml(o.addons)}</div>
+        ${discBoxHtml(o)}`;
   }
   function setOrderStateLook(row, status, editing){
     const el = row && row.querySelector('.o-state');
@@ -4540,6 +4593,8 @@
       };
       enhanceStickerSelects(row);
       refreshOrderRowTotal(row);
+      row.addEventListener('click', (e) => { if (e.target.closest('.o-disc-box')) onDiscBoxClick(e, row, order); });
+      row.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList.contains('dc-input')) { e.preventDefault(); row.querySelector('.dc-check').click(); } });
       row.addEventListener('change', (e) => {
         if (e.target.classList && e.target.classList.contains('o-tumbler')) {
           const sel = row.querySelector('.o-colour');
@@ -4575,6 +4630,20 @@
         const codesOf = (stickerCode, addons) => [stickerCode, ...extraStickerCodes(addons), promoStickerCode(addons)].filter(Boolean);
         const oldCodes = codesOf(order.sticker_code, order.addons);
         const newCodes = codesOf(row.querySelector('.o-sticker').value.trim() || null, readAddonsValue(row));
+        // 🎟 A discount code added / removed in Edit: mark it used on this order first (so it can't
+        // be used twice), save the order, then free the code that was taken off.
+        const oldDisc = discountOf(order.addons), newDisc = discountOf(readAddonsValue(row));
+        const discAdded = newDisc && (!oldDisc || oldDisc.code !== newDisc.code);
+        const discRemoved = oldDisc && (!newDisc || newDisc.code !== oldDisc.code);
+        let ownAlready = false;
+        if (discAdded) {
+          const already = await client.from('credit_codes').select('code,status,used_order_no').eq('code', newDisc.code).maybeSingle();
+          ownAlready = already.data && already.data.status === 'used' && already.data.used_order_no === order.order_no;
+          const { data: claimed, error: ce } = ownAlready ? { data: [already.data], error: null } : await client.from('credit_codes')
+            .update({ status: 'used', used_at: new Date().toISOString(), used_order_no: order.order_no, used_amount: newDisc.amount })
+            .eq('code', newDisc.code).eq('status', 'active').select('code');
+          if (ce || !claimed || !claimed.length) { showToast(`⚠️ Couldn't use ${newDisc.code} — it may have just been used. Nothing was saved.`, true); return; }
+        }
         const { error } = await client.from('orders').update({
           customer_name: row.querySelector('.o-name').value.trim() || null,
           tiktok_handle: row.querySelector('.o-tiktok').value.trim() || null,
@@ -4585,7 +4654,15 @@
           // only sent when the orders table actually has the delivery column
           ...('delivery' in order ? { delivery: (row.querySelector('.o-delivery') || {}).value || null } : {}),
         }).eq('id', id);
-        if (error) { showToast(error.message, true); return; }
+        if (error) {
+          if (discAdded && !ownAlready) await client.from('credit_codes').update({ status: 'active', used_at: null, used_order_no: null, used_amount: null }).eq('code', newDisc.code).eq('used_order_no', order.order_no);
+          showToast(error.message, true); return;
+        }
+        if (discRemoved) await client.from('credit_codes').update({ status: 'active', used_at: null, used_order_no: null, used_amount: null }).eq('code', oldDisc.code).eq('used_order_no', order.order_no);
+        if (creditCodesAdmin) {
+          if (discRemoved && creditCodesAdmin[oldDisc.code]) Object.assign(creditCodesAdmin[oldDisc.code], { status: 'active', used_order_no: null, used_amount: null });
+          if (discAdded) creditCodesAdmin[newDisc.code] = Object.assign(creditCodesAdmin[newDisc.code] || { code: newDisc.code }, { status: 'used', used_order_no: order.order_no, used_amount: newDisc.amount });
+        }
         order.customer_name = row.querySelector('.o-name').value.trim() || null;
         order.tiktok_handle = row.querySelector('.o-tiktok').value.trim() || null;
         order.tumbler = row.querySelector('.o-tumbler').value.trim() || null;
@@ -4597,6 +4674,7 @@
         saveBtn.style.display = 'none';
         editBtn.style.display = '';
         row.querySelector('.o-view').innerHTML = orderViewHtml(order);
+        const formEl = row.querySelector('.o-form'); formEl.innerHTML = orderFormHtml(order); enhanceStickerSelects(formEl);
         setEditing(false);
         // An order that's already Paid: changing its stickers moves the stock too
         // (the old sticker goes back, the new one is taken off).
@@ -5585,10 +5663,20 @@
   });
 
   document.getElementById('addOrderBtn').addEventListener('click', async () => {
-    const { error } = await client.from('orders').insert({ status: 'pending' });
-    if (error) { showToast(error.message, true); return; }
-    showToast('✅ Order added!');
-    renderOrders();
+    // Adding an order by hand (e.g. it didn't save from the website): keep the customer's order number.
+    const typed = prompt('Order number from the WhatsApp message (e.g. 1121K05)\n订单号（看顾客的 WhatsApp 讯息）\n\nLeave empty if there isn\'t one · 没有就留空');
+    if (typed === null) return;
+    const no = typed.toUpperCase().replace(/[^0-9A-Z]/g, '');
+    if (no && !/^[0-9A-Z]{5,12}$/.test(no)) { showToast('That doesn\'t look like an order number (e.g. 1121K05)', true); return; }
+    if (no && allOrdersAdmin.some(o => o.order_no === no) && !confirm(`There is already an order ${no} in the list. Add another one with the same number?`)) return;
+    let res = await client.from('orders').insert({ status: 'pending', ...(no ? { order_no: no } : {}) }).select('id');
+    if (res.error && no && /order_no/i.test(res.error.message || '')) res = await client.from('orders').insert({ status: 'pending' }).select('id');
+    if (res.error) { showToast(res.error.message, true); return; }
+    showToast('✅ Order added — fill it in and press Save');
+    await renderOrders();
+    const id = res.data && res.data[0] && res.data[0].id;
+    const row = id && document.querySelector(`#ordersList .order-row[data-id="${id}"]`);
+    if (row) { row.style.display = ''; row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.querySelector('.o-edit-btn').click(); }
   });
 
   // Don't lose work in progress when reloading for a new version.
